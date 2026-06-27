@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0f1830"/>
+      <stop offset="100%" stop-color="#060a14"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3d8bff" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#3d8bff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="192" height="192" rx="34.56" fill="url(#bg)"/>
+  
+  <!-- Glow -->
+  <circle cx="96" cy="96" r="86.4" fill="url(#glow)"/>
+  
+  <!-- Outer ring -->
+  <circle cx="96" cy="96" r="86.4" fill="none" stroke="#1e2d4a" stroke-width="4.800000000000001"/>
+  
+  <!-- Inner ring -->
+  <circle cx="96" cy="96" r="64.80000000000001" fill="none" stroke="#1e2d4a" stroke-width="2.3040000000000003" stroke-dasharray="11.52 7.68"/>
+  
+  <!-- Seismic wave -->
+  <polyline 
+    points="23.04,96 48,96 63.36,33.599999999999994 78.72,158.39999999999998 94.08,52.800000000000004 109.44,129.60000000000002 124.80000000000001,96 147.84,96 159.35999999999999,48 168.96,96"
+    fill="none" 
+    stroke="#3d8bff" 
+    stroke-width="7.68" 
+    stroke-linecap="round" 
+    stroke-linejoin="round"
+  />
+  
+  <!-- Center dot -->
+  <circle cx="96" cy="96" r="7.68" fill="#e74c3c"/>
+  <circle cx="96" cy="96" r="4.800000000000001" fill="#ff6b6b"/>
+</svg>

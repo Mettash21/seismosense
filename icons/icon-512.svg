@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0f1830"/>
+      <stop offset="100%" stop-color="#060a14"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3d8bff" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#3d8bff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="92.16" fill="url(#bg)"/>
+  
+  <!-- Glow -->
+  <circle cx="256" cy="256" r="230.4" fill="url(#glow)"/>
+  
+  <!-- Outer ring -->
+  <circle cx="256" cy="256" r="230.4" fill="none" stroke="#1e2d4a" stroke-width="12.8"/>
+  
+  <!-- Inner ring -->
+  <circle cx="256" cy="256" r="172.8" fill="none" stroke="#1e2d4a" stroke-width="6.144" stroke-dasharray="30.72 20.48"/>
+  
+  <!-- Seismic wave -->
+  <polyline 
+    points="61.44,256 128,256 168.96,89.6 209.92,422.4 250.88,140.8 291.84,345.6 332.8,256 394.24,256 424.96,128 450.56,256"
+    fill="none" 
+    stroke="#3d8bff" 
+    stroke-width="20.48" 
+    stroke-linecap="round" 
+    stroke-linejoin="round"
+  />
+  
+  <!-- Center dot -->
+  <circle cx="256" cy="256" r="20.48" fill="#e74c3c"/>
+  <circle cx="256" cy="256" r="12.8" fill="#ff6b6b"/>
+</svg>

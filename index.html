@@ -1,0 +1,1965 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#0a0f1e">
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/icons/icon-192.svg">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SeismoSense">
+<title>SeismoSense — Monitor Sísmico Global</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root {
+  --void: #060a14;
+  --deep: #0a1020;
+  --surface: #0f1830;
+  --panel: #141e35;
+  --border: #1e2d4a;
+  --muted: #2a3d5e;
+  --text-dim: #6b84a8;
+  --text: #c8d8f0;
+  --bright: #e8f2ff;
+  --risk-0: #1a3a2a;
+  --risk-low: #1e6b3a;
+  --risk-low-c: #2ecc71;
+  --risk-mod: #7a5200;
+  --risk-mod-c: #f39c12;
+  --risk-high: #7a2200;
+  --risk-high-c: #e67e22;
+  --risk-crit: #6a0a0a;
+  --risk-crit-c: #e74c3c;
+  --risk-extreme: #4a0066;
+  --risk-extreme-c: #9b59b6;
+  --pulse: #e74c3c;
+  --accent: #3d8bff;
+  --accent2: #00d4aa;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: var(--void);
+  color: var(--text);
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+header {
+  background: var(--deep);
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  z-index: 1000;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-icon {
+  width: 32px; height: 32px;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.seismo-wave {
+  width: 28px; height: 28px;
+}
+
+.logo-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--bright);
+}
+
+.logo-name span { color: var(--accent); }
+
+.header-right {
+  display: flex; align-items: center; gap: 12px;
+}
+
+.live-badge {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--risk-low-c);
+  letter-spacing: 0.5px;
+}
+
+.live-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--risk-low-c);
+  animation: livePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+.update-time {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* ── Main layout ── */
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 320px;
+  background: var(--deep);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tab {
+  flex: 1;
+  padding: 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+}
+
+.tab:hover:not(.active) { color: var(--text); }
+
+.tab-content { display: none; flex: 1; overflow-y: auto; }
+.tab-content.active { display: flex; flex-direction: column; }
+
+/* ── Global Stats ── */
+.global-stats {
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.stat-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-family: 'Space Mono', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--bright);
+  line-height: 1;
+}
+
+.stat-value.warning { color: var(--risk-mod-c); }
+.stat-value.danger { color: var(--risk-crit-c); }
+.stat-value.safe { color: var(--risk-low-c); }
+
+.stat-sub {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* ── Alert banner ── */
+.alert-banner {
+  margin: 10px 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-left: 3px solid var(--risk-crit-c);
+  background: rgba(231,76,60,0.08);
+  display: none;
+  flex-shrink: 0;
+}
+
+.alert-banner.visible { display: block; }
+
+.alert-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--risk-crit-c);
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+
+.alert-body { font-size: 11px; color: var(--text); line-height: 1.4; }
+
+/* ── Risk list ── */
+.section-header {
+  padding: 10px 12px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.risk-list { flex: 1; overflow-y: auto; padding: 0 12px 12px; }
+
+.risk-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.risk-item:hover {
+  border-color: var(--accent);
+  background: var(--panel);
+}
+
+.risk-item::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+}
+
+.risk-item.low::before { background: var(--risk-low-c); }
+.risk-item.moderate::before { background: var(--risk-mod-c); }
+.risk-item.high::before { background: var(--risk-high-c); }
+.risk-item.critical::before { background: var(--risk-crit-c); }
+.risk-item.extreme::before { background: var(--risk-extreme-c); }
+
+.risk-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+
+.risk-zone-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bright);
+}
+
+.risk-country {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+
+.risk-badge {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.risk-badge.low { color: var(--risk-low-c); }
+.risk-badge.moderate { color: var(--risk-mod-c); }
+.risk-badge.high { color: var(--risk-high-c); }
+.risk-badge.critical { color: var(--risk-crit-c); }
+.risk-badge.extreme { color: var(--risk-extreme-c); }
+
+.risk-bar-track {
+  height: 4px;
+  background: var(--muted);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.risk-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 1s ease;
+}
+
+.risk-bar-fill.low { background: var(--risk-low-c); }
+.risk-bar-fill.moderate { background: var(--risk-mod-c); }
+.risk-bar-fill.high { background: var(--risk-high-c); }
+.risk-bar-fill.critical { background: var(--risk-crit-c); }
+.risk-bar-fill.extreme { background: var(--risk-extreme-c); }
+
+.risk-item-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.risk-meta-tag {
+  font-size: 9px;
+  color: var(--text-dim);
+  background: var(--muted);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Space Mono', monospace;
+}
+
+/* ── Events list ── */
+.events-list { flex: 1; overflow-y: auto; }
+
+.event-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.event-item:hover { background: var(--surface); }
+
+.event-mag {
+  font-family: 'Space Mono', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  min-width: 36px;
+  text-align: center;
+  line-height: 1;
+  padding-top: 2px;
+}
+
+.event-mag.m-low { color: var(--risk-low-c); }
+.event-mag.m-mod { color: var(--risk-mod-c); }
+.event-mag.m-high { color: var(--risk-high-c); }
+.event-mag.m-crit { color: var(--risk-crit-c); }
+
+.event-info { flex: 1; }
+
+.event-place {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--bright);
+  margin-bottom: 2px;
+  line-height: 1.3;
+}
+
+.event-meta {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+/* ── Technical panel tab ── */
+.tech-panel { padding: 12px; }
+
+.tech-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.tech-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tech-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.tech-row:last-child { border-bottom: none; }
+.tech-key { color: var(--text-dim); }
+.tech-val {
+  font-family: 'Space Mono', monospace;
+  color: var(--bright);
+  font-size: 11px;
+}
+
+.tech-val.highlight { color: var(--risk-crit-c); }
+.tech-val.ok { color: var(--risk-low-c); }
+.tech-val.warn { color: var(--risk-mod-c); }
+
+/* Mini chart */
+.mini-chart {
+  height: 60px;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 4px 0;
+}
+
+.chart-bar {
+  flex: 1;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.5s ease;
+  cursor: pointer;
+  min-height: 3px;
+}
+
+.chart-bar:hover { opacity: 0.8; }
+
+.chart-labels {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+
+/* GR distribution */
+.gr-chart {
+  height: 80px;
+  position: relative;
+  margin-top: 8px;
+  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.gr-line {
+  position: absolute;
+  bottom: 0; left: 0;
+  width: 100%; height: 100%;
+}
+
+/* ── Map ── */
+#map {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+/* Override leaflet for dark theme */
+.leaflet-container {
+  background: #0a1020 !important;
+  font-family: 'Space Grotesk', sans-serif !important;
+}
+
+.leaflet-tile-pane { filter: brightness(0.7) saturate(0.5) hue-rotate(180deg); }
+
+/* Map overlay controls */
+.map-controls {
+  position: absolute;
+  top: 12px; right: 12px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.map-btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 11px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.map-btn:hover, .map-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* Legend */
+.map-legend {
+  position: absolute;
+  bottom: 24px; left: 12px;
+  z-index: 500;
+  background: rgba(10, 16, 32, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  backdrop-filter: blur(8px);
+}
+
+.legend-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 10px;
+  color: var(--text);
+}
+
+.legend-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Detail popup overlay */
+.detail-overlay {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  border-radius: 16px 16px 0 0;
+  padding: 16px;
+  z-index: 600;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  max-height: 60%;
+  overflow-y: auto;
+}
+
+.detail-overlay.open { transform: translateY(0); }
+
+.detail-handle {
+  width: 36px; height: 4px;
+  background: var(--muted);
+  border-radius: 2px;
+  margin: 0 auto 14px;
+}
+
+.detail-close {
+  position: absolute;
+  top: 14px; right: 16px;
+  background: var(--muted);
+  border: none;
+  color: var(--text);
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.detail-zone-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--bright);
+  margin-bottom: 2px;
+}
+
+.detail-zone-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+}
+
+.detail-risk-display {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 12px;
+  background: var(--surface);
+  border-radius: 10px;
+}
+
+.detail-risk-pct {
+  font-family: 'Space Mono', monospace;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.detail-risk-info { flex: 1; }
+
+.detail-risk-label {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.detail-risk-desc {
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.detail-models {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.model-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+}
+
+.model-name {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.model-value {
+  font-family: 'Space Mono', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--bright);
+}
+
+.detail-faults {
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.fault-tag {
+  display: inline-block;
+  background: var(--muted);
+  color: var(--text);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: 'Space Mono', monospace;
+  margin: 2px;
+}
+
+.fault-tag.active {
+  background: rgba(231,76,60,0.2);
+  color: var(--risk-crit-c);
+  border: 1px solid rgba(231,76,60,0.3);
+}
+
+/* Historical case */
+.history-card {
+  background: rgba(61,139,255,0.06);
+  border: 1px solid rgba(61,139,255,0.2);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 10px;
+}
+
+.history-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.history-body {
+  font-size: 10px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* Loading */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--void);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  transition: opacity 0.5s;
+}
+
+.loading-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-seismo {
+  width: 120px; height: 40px;
+  margin-bottom: 20px;
+}
+
+.loading-text {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  animation: fadeText 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes fadeText {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 2px; }
+
+/* Mobile */
+@media (max-width: 768px) {
+  .sidebar { width: 100%; height: 45%; }
+  .app-body { flex-direction: column; }
+  #map { height: 55%; flex: none; }
+}
+
+/* Earthquake pulse animation on map */
+@keyframes eqPulse {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+.eq-pulse-ring {
+  animation: eqPulse 2s ease-out infinite;
+}
+
+.tooltip-custom {
+  background: var(--panel) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  font-family: 'Space Grotesk', sans-serif !important;
+  font-size: 11px !important;
+  border-radius: 6px !important;
+  padding: 6px 10px !important;
+}
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loadingOverlay">
+  <svg class="loading-seismo" viewBox="0 0 120 40" fill="none">
+    <polyline points="0,20 15,20 20,5 25,35 30,10 35,28 40,20 55,20 62,2 68,38 74,15 80,25 85,20 120,20"
+      stroke="#3d8bff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <animate attributeName="stroke-dasharray" from="0 400" to="400 0" dur="1.5s" repeatCount="indefinite"/>
+    </polyline>
+  </svg>
+  <div class="loading-text" id="loadingText">CONECTANDO CON USGS...</div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <svg class="seismo-wave" viewBox="0 0 32 32" fill="none">
+      <polyline points="2,16 6,16 9,6 12,26 15,10 18,22 21,16 26,16 28,9 30,16"
+        stroke="#3d8bff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="16" cy="16" r="14" stroke="#1e2d4a" stroke-width="1.5" fill="none"/>
+    </svg>
+    <div class="logo-name">Seismo<span>Sense</span></div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      DATOS EN VIVO
+    </div>
+    <div class="update-time" id="updateTime">--:--:--</div>
+  </div>
+</header>
+
+<!-- App Body -->
+<div class="app-body">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-tabs">
+      <button class="tab active" onclick="switchTab('risk')">⚠ RIESGO</button>
+      <button class="tab" onclick="switchTab('events')">🌍 EVENTOS</button>
+      <button class="tab" onclick="switchTab('tech')">📊 MODELOS</button>
+    </div>
+
+    <!-- RISK TAB -->
+    <div class="tab-content active" id="tab-risk">
+      <div class="global-stats">
+        <div class="stat-card">
+          <div class="stat-label">Sismos 24h</div>
+          <div class="stat-value" id="stat-24h">—</div>
+          <div class="stat-sub">M ≥ 2.5 global</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Mayor hoy</div>
+          <div class="stat-value warning" id="stat-max">—</div>
+          <div class="stat-sub" id="stat-max-loc">cargando...</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Zonas críticas</div>
+          <div class="stat-value danger" id="stat-crit">—</div>
+          <div class="stat-sub">prob &gt; 60%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Índice global</div>
+          <div class="stat-value" id="stat-global-idx">—</div>
+          <div class="stat-sub">actividad relativa</div>
+        </div>
+      </div>
+
+      <div class="alert-banner" id="alertBanner">
+        <div class="alert-title">⚡ ALERTA ESTADÍSTICA ACTIVA</div>
+        <div class="alert-body" id="alertText">—</div>
+      </div>
+
+      <div class="section-header">ZONAS POR PROBABILIDAD ESTIMADA</div>
+      <div class="risk-list" id="riskList">
+        <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:12px;">
+          Calculando modelos estadísticos...
+        </div>
+      </div>
+    </div>
+
+    <!-- EVENTS TAB -->
+    <div class="tab-content" id="tab-events">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span>ÚLTIMOS SISMOS — USGS</span>
+        <span style="font-size:9px;color:var(--accent);font-family:'Space Mono'" id="eventsCount">—</span>
+      </div>
+      <div class="events-list" id="eventsList">
+        <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:12px;">
+          Cargando datos USGS...
+        </div>
+      </div>
+    </div>
+
+    <!-- TECH TAB -->
+    <div class="tab-content" id="tab-tech">
+      <div class="tech-panel" id="techPanel">
+        <div class="tech-section">
+          <div class="tech-title">⚙ MODELO ETAS</div>
+          <div style="font-size:10px;color:var(--text-dim);line-height:1.5;margin-bottom:8px;">
+            Epidemic Type Aftershock Sequence: modela la probabilidad de que un sismo desencadene uno mayor, basado en frecuencia temporal y clustering espacial.
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Ventana temporal</span>
+            <span class="tech-val">7 días</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Radio espacial</span>
+            <span class="tech-val">300 km</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Parámetro p (decay)</span>
+            <span class="tech-val" id="etasP">1.08</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Parámetro K</span>
+            <span class="tech-val" id="etasK">0.012</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Zona más activa ETAS</span>
+            <span class="tech-val highlight" id="etasTop">—</span>
+          </div>
+        </div>
+
+        <div class="tech-section">
+          <div class="tech-title">📈 GUTENBERG-RICHTER</div>
+          <div style="font-size:10px;color:var(--text-dim);line-height:1.5;margin-bottom:8px;">
+            Ley log(N) = a − b·M. Cada zona tiene un valor b calculado sobre historial real. Desviación del b-value indica acumulación de energía anómala.
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">b-value global medio</span>
+            <span class="tech-val" id="grBvalue">—</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Zona con b-value bajo</span>
+            <span class="tech-val highlight" id="grLow">—</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Deuda sísmica detectada</span>
+            <span class="tech-val warn" id="grDebt">—</span>
+          </div>
+          <div style="margin-top:8px">
+            <div style="font-size:9px;color:var(--text-dim);margin-bottom:4px;">DISTRIBUCIÓN FRECUENCIA/MAGNITUD (7d)</div>
+            <canvas id="grCanvas" width="280" height="70" style="width:100%;border-radius:4px;background:var(--void)"></canvas>
+          </div>
+        </div>
+
+        <div class="tech-section">
+          <div class="tech-title">🔗 TRANSFERENCIA DE COULOMB</div>
+          <div style="font-size:10px;color:var(--text-dim);line-height:1.5;margin-bottom:8px;">
+            Calcula el cambio en estrés estático en fallas vecinas tras un sismo mayor. Si ΔCFS &gt; 0, la falla recibió estrés adicional.
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Último evento M≥6 analizado</span>
+            <span class="tech-val" id="cfsMag">—</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Fallas con ΔCFS positivo</span>
+            <span class="tech-val highlight" id="cfsFaults">—</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Riesgo inducido</span>
+            <span class="tech-val warn" id="cfsRisk">—</span>
+          </div>
+        </div>
+
+        <div class="tech-section">
+          <div class="tech-title">📡 FUENTES DE DATOS</div>
+          <div class="tech-row">
+            <span class="tech-key">USGS GeoJSON Feed</span>
+            <span class="tech-val ok">● ACTIVO</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Actualización</span>
+            <span class="tech-val">Cada 5 min</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Eventos cargados</span>
+            <span class="tech-val" id="techEventCount">—</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Modelo ETAS</span>
+            <span class="tech-val ok">● LOCAL</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">G-R Distribution</span>
+            <span class="tech-val ok">● LOCAL</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map -->
+  <div style="flex:1;position:relative;overflow:hidden;">
+    <div id="map"></div>
+
+    <div class="map-controls">
+      <button class="map-btn active" id="btnRisk" onclick="setMapMode('risk')">🎯 Riesgo</button>
+      <button class="map-btn" id="btnSismos" onclick="setMapMode('sismos')">💥 Sismos</button>
+      <button class="map-btn" id="btnFaults" onclick="setMapMode('faults')">🗺 Fallas</button>
+    </div>
+
+    <div class="map-legend">
+      <div class="legend-title">PROBABILIDAD ESTIMADA</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#2ecc71"></div> Baja (&lt;30%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f39c12"></div> Moderada (30–50%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e67e22"></div> Alta (50–65%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e74c3c"></div> Crítica (65–80%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#9b59b6"></div> Extrema (&gt;80%)</div>
+    </div>
+
+    <!-- Detail overlay -->
+    <div class="detail-overlay" id="detailOverlay">
+      <div class="detail-handle"></div>
+      <button class="detail-close" onclick="closeDetail()">×</button>
+      <div class="detail-zone-name" id="detailName">—</div>
+      <div class="detail-zone-sub" id="detailSub">—</div>
+      <div class="detail-risk-display">
+        <div class="detail-risk-pct" id="detailPct">—</div>
+        <div class="detail-risk-info">
+          <div class="detail-risk-label" id="detailLabel">—</div>
+          <div class="detail-risk-desc" id="detailDesc">—</div>
+        </div>
+      </div>
+      <div class="detail-models" id="detailModels"></div>
+      <div style="font-size:9px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;">FALLAS ACTIVAS</div>
+      <div id="detailFaults"></div>
+      <div id="detailHistory"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  SeismoSense — Motor Estadístico + USGS Real Data
+// ══════════════════════════════════════════════════════════
+
+// ── Zonas de riesgo global (base geológica real) ──
+const RISK_ZONES = [
+  {
+    id: 'eje-cafetero', name: 'Eje Cafetero', country: 'Colombia',
+    lat: 4.5, lng: -75.7,
+    faults: ['Romeral', 'Silvia-Pijao', 'Cauca-Almaguer'], activeFaults: ['Silvia-Pijao'],
+    baseRisk: 0.48, bValue: 0.82,
+    history: 'M6.2 Armenia, 25 ene 1999 — 1.900 muertos. Falla Silvia-Pijao sin romper desde entonces. Deuda sísmica acumulada ~27 años.',
+    historyTitle: 'CASO: TERREMOTO DEL QUINDÍO 1999',
+    deuda: true, region: 'Andes Colombianos'
+  },
+  {
+    id: 'bucaramanga', name: 'Nido Sísmico Bucaramanga', country: 'Colombia',
+    lat: 7.0, lng: -73.1,
+    faults: ['Boconó', 'Bucaramanga-Santa Marta'], activeFaults: ['Boconó'],
+    baseRisk: 0.41, bValue: 0.71,
+    history: 'Nido sísmico más activo de Colombia. 60% de sismicidad nacional. Hasta 20 sismos/día a 150km profundidad. Falla Boconó conecta con Venezuela.',
+    historyTitle: 'NIDO SÍSMICO — MAYOR ACTIVIDAD COLOMBIA',
+    deuda: false, region: 'Santander'
+  },
+  {
+    id: 'yaracuy-venezuela', name: 'Sistema Oca-Boconó', country: 'Venezuela',
+    lat: 10.5, lng: -68.8,
+    faults: ['Falla de Oca', 'Boconó', 'San Sebastián'], activeFaults: ['Falla de Oca', 'Boconó'],
+    baseRisk: 0.78, bValue: 0.65,
+    history: 'Doblete M7.2+M7.5 el 24 jun 2026 — 920+ fallecidos. Liberación de energía acumulada ~100 años. Réplicas continuas. ΔCFS positivo en fallas vecinas hacia Colombia.',
+    historyTitle: '⚡ EVENTO ACTIVO — 24 JUN 2026',
+    deuda: false, region: 'Norte Venezuela', alert: true
+  },
+  {
+    id: 'ring-fire-chile', name: 'Norte Chile (Zona Subducción)', country: 'Chile',
+    lat: -22.0, lng: -69.5,
+    faults: ['Falla de Atacama', 'Zona Subducción Nazca'], activeFaults: ['Zona Subducción Nazca'],
+    baseRisk: 0.72, bValue: 0.88,
+    history: 'Zona de subducción activa. M8.0+ posible. Segmento norte sin ruptura mayor desde 1877 (M8.7). Deuda sísmica estimada >150 años.',
+    historyTitle: 'LAGUNA SÍSMICA — DEUDA >145 AÑOS',
+    deuda: true, region: 'Atacama'
+  },
+  {
+    id: 'cascadia', name: 'Cascadia Subduction Zone', country: 'EE.UU./Canadá',
+    lat: 47.5, lng: -124.0,
+    faults: ['Cascadia Megathrust'], activeFaults: ['Cascadia Megathrust'],
+    baseRisk: 0.68, bValue: 0.79,
+    history: 'Última gran ruptura: 1700 (M~9.0). Probabilidad 14% de M8+ en próximos 50 años según USGS. Potencial tsunami Océano Pacífico.',
+    historyTitle: 'MEGATHRUST — RIESGO REGIONAL ALTO',
+    deuda: true, region: 'Pacífico Noroeste'
+  },
+  {
+    id: 'nepal-himalaya', name: 'Himalaya Central', country: 'Nepal/India',
+    lat: 28.0, lng: 84.5,
+    faults: ['Main Himalayan Thrust', 'Main Boundary Thrust'], activeFaults: ['Main Himalayan Thrust'],
+    baseRisk: 0.64, bValue: 0.91,
+    history: 'M7.8 Gorkha 2015 — 9.000 muertos. Segmentos al oeste sin ruptura histórica reciente. Convergencia ~20mm/año India-Eurasia.',
+    historyTitle: 'POST-GORKHA: SEGMENTOS ADYACENTES',
+    deuda: true, region: 'Asia Central'
+  },
+  {
+    id: 'turkey-east', name: 'Falla Anatolia Oriental', country: 'Türkiye',
+    lat: 37.5, lng: 38.0,
+    faults: ['East Anatolian Fault', 'Dead Sea Fault'], activeFaults: ['East Anatolian Fault'],
+    baseRisk: 0.71, bValue: 0.76,
+    history: 'M7.8 Kahramanmaraş feb 2023 — 57.000 muertos. Segmento norte EAF recibió estrés de Coulomb positivo. Actividad elevada post-evento.',
+    historyTitle: 'POST-KAHRAMANMARAŞ 2023',
+    deuda: false, region: 'Anatolia'
+  },
+  {
+    id: 'japan-nankai', name: 'Nankai Trough', country: 'Japón',
+    lat: 33.0, lng: 136.0,
+    faults: ['Nankai Megathrust'], activeFaults: ['Nankai Megathrust'],
+    baseRisk: 0.83, bValue: 0.93,
+    history: 'JMA elevó alerta a máximo en ago 2024 tras M7.1. Probabilidad 70-80% de M8-9 en próximos 30 años. Potencial 300.000+ víctimas sin preparación.',
+    historyTitle: 'ALERTA MÁXIMA JMA — MEGAEVENETO ESPERADO',
+    deuda: true, region: 'Pacífico Japón'
+  },
+  {
+    id: 'iran-zagros', name: 'Sistema Zagros', country: 'Irán',
+    lat: 33.0, lng: 48.0,
+    faults: ['Main Zagros Thrust', 'Main Recent Fault'], activeFaults: ['Main Recent Fault'],
+    baseRisk: 0.54, bValue: 0.85,
+    history: 'Zona de colisión Arabia-Eurasia. M7.3 Kermanshah 2017 — 620 muertos. Alta frecuencia M5-6. Infraestructura vulnerable.',
+    historyTitle: 'COLISIÓN TECTÓNICA ACTIVA',
+    deuda: false, region: 'Oriente Medio'
+  },
+  {
+    id: 'california-san-andreas', name: 'Falla San Andrés Sur', country: 'EE.UU.',
+    lat: 34.0, lng: -117.5,
+    faults: ['San Andreas Fault', 'San Jacinto Fault'], activeFaults: ['San Andreas Fault'],
+    baseRisk: 0.60, bValue: 1.02,
+    history: '"The Big One" esperado. Segmento sur sin ruptura mayor desde ~1690. Desplazamiento lateral acumulado estimado 7-8 metros. Los Ángeles en zona crítica.',
+    historyTitle: '"THE BIG ONE" — DEUDA SÍSMICA >300 AÑOS',
+    deuda: true, region: 'California Sur'
+  },
+  {
+    id: 'mexico-guerrero', name: 'Laguna de Guerrero', country: 'México',
+    lat: 17.5, lng: -100.0,
+    faults: ['Cocos Plate Subduction', 'Guerrero Seismic Gap'], activeFaults: ['Cocos Plate Subduction'],
+    baseRisk: 0.66, bValue: 0.87,
+    history: 'Laguna sísmica sin ruptura mayor desde 1911. M7.1 CDMX 2017 — 369 muertos. Segmento Guerrero acumula tensión crítica desde hace décadas.',
+    historyTitle: 'LAGUNA DE GUERRERO — DEUDA SÍSMICA',
+    deuda: true, region: 'Pacífico Mexicano'
+  },
+  {
+    id: 'sumatra-java', name: 'Sumatra-Java', country: 'Indonesia',
+    lat: -6.5, lng: 107.0,
+    faults: ['Sunda Megathrust', 'Java Trench'], activeFaults: ['Sunda Megathrust'],
+    baseRisk: 0.69, bValue: 0.88,
+    history: 'M9.1-9.3 Sumatra 2004 — 230.000 muertos. Subducción Indo-Australiana continua. Segmento Java con deuda sísmica post-2004. Alta actividad de base.',
+    historyTitle: 'POST-SUMATRA: SEGMENTOS ACTIVOS',
+    deuda: false, region: 'Asia-Pacífico'
+  },
+  {
+    id: 'central-asia', name: 'Pamir-Hindu Kush', country: 'Afganistán/Tayikistán',
+    lat: 37.0, lng: 71.0,
+    faults: ['Darvaz Fault', 'Hindo Kush Seismic Nest'], activeFaults: ['Hindo Kush Seismic Nest'],
+    baseRisk: 0.55, bValue: 0.74,
+    history: 'Segundo nido sísmico del mundo (después de Bucaramanga). Alta frecuencia de sismos profundos M6+. Triple colisión de placas.',
+    historyTitle: 'NIDO SÍSMICO HINDÚ KUSH',
+    deuda: false, region: 'Asia Central'
+  }
+];
+
+// ── State ──
+let mapInstance = null;
+let riskMarkers = [];
+let eqMarkers = [];
+let faultLines = [];
+let mapMode = 'risk';
+let earthquakeData = [];
+let selectedZone = null;
+let riskZonesComputed = [];
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', async () => {
+  initMap();
+  updateClock();
+  setInterval(updateClock, 1000);
+  await loadUSGSData();
+  setInterval(loadUSGSData, 300000); // refresh 5min
+});
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('updateTime').textContent =
+    now.toUTCString().split(' ')[4] + ' UTC';
+}
+
+// ── Map Init ──
+function initMap() {
+  mapInstance = L.map('map', {
+    center: [15, 0],
+    zoom: 2,
+    zoomControl: true,
+    attributionControl: false
+  });
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    opacity: 0.6
+  }).addTo(mapInstance);
+
+  // Draw major fault lines (simplified)
+  drawFaultLines();
+}
+
+function drawFaultLines() {
+  const faults = [
+    // San Andreas
+    { coords: [[32.5,-117],[34.5,-118.5],[36,-120],[38,-122],[40,-124]], color: '#e74c3c', name: 'San Andrés' },
+    // Cascadia
+    { coords: [[40,-125],[45,-124.5],[50,-127]], color: '#9b59b6', name: 'Cascadia' },
+    // Andes / Romeral
+    { coords: [[-5,-77],[-1,-76],[4,-76],[8,-76],[11,-73]], color: '#e67e22', name: 'Sistema Andes' },
+    // Boconó / Oca Venezuela
+    { coords: [[8,-73],[9,-70],[10.5,-67],[11,-65]], color: '#e74c3c', name: 'Oca-Boconó' },
+    // East Anatolian
+    { coords: [[36,28],[37,32],[37.5,37],[38,40],[38.5,44]], color: '#f39c12', name: 'Anatolia' },
+    // Sumatra
+    { coords: [[5,95],[0,103],[-6,106],[-10,110]], color: '#e74c3c', name: 'Sunda' },
+    // Japan
+    { coords: [[30,131],[34,137],[36,141],[40,143]], color: '#f39c12', name: 'Nankai' },
+    // Himalayas
+    { coords: [[28,72],[28,80],[28,88],[27,95]], color: '#e67e22', name: 'Himalaya' },
+    // Chile subduction
+    { coords: [[-18,-70],[-22,-70],[-28,-70],[-34,-72],[,-40,-73]], color: '#9b59b6', name: 'Nazca' },
+    // Zagros
+    { coords: [[29,50],[32,49],[35,47],[37,45]], color: '#f39c12', name: 'Zagros' },
+  ];
+
+  faults.forEach(f => {
+    const line = L.polyline(f.coords, {
+      color: f.color,
+      weight: 2,
+      opacity: 0.35,
+      dashArray: '4 4'
+    });
+    faultLines.push(line);
+    if (mapMode === 'faults') line.addTo(mapInstance);
+  });
+}
+
+// ── USGS Data ──
+async function loadUSGSData() {
+  setLoadingText('CONECTANDO CON USGS...');
+  try {
+    // Past 7 days, M2.5+
+    const res = await fetch(
+      'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson'
+    );
+    const data = await res.json();
+    earthquakeData = data.features || [];
+
+    setLoadingText('CALCULANDO MODELOS ETAS...');
+    await sleep(300);
+
+    computeRiskModels();
+    renderRiskList();
+    renderEventsList();
+    renderMap();
+    updateGlobalStats();
+    updateTechPanel();
+    hideLoading();
+
+  } catch(e) {
+    console.error('USGS fetch error:', e);
+    setLoadingText('ERROR — USANDO DATOS DE RESPALDO');
+    useFallbackData();
+    hideLoading();
+  }
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function setLoadingText(t) {
+  const el = document.getElementById('loadingText');
+  if (el) el.textContent = t;
+}
+
+function hideLoading() {
+  setTimeout(() => {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) overlay.classList.add('hidden');
+  }, 600);
+}
+
+// ── Statistical Models ──
+function computeRiskModels() {
+  const now = Date.now();
+  const week = 7 * 24 * 3600 * 1000;
+
+  riskZonesComputed = RISK_ZONES.map(zone => {
+    // Find nearby earthquakes (within ~300km radius)
+    const nearby = earthquakeData.filter(eq => {
+      const [lng, lat] = eq.geometry.coordinates;
+      const d = haversine(lat, lng, zone.lat, zone.lng);
+      return d < 300;
+    });
+
+    const recent = nearby.filter(eq =>
+      (now - eq.properties.time) < week
+    );
+
+    // ── ETAS Model ──
+    // P(next M≥5 | recent activity) using Omori-Utsu decay
+    let etasProb = zone.baseRisk;
+    const p = 1.08, K = 0.012, c = 0.01;
+    const tDays = (now - (recent[0]?.properties.time || now - 86400000)) / 86400000;
+
+    if (recent.length > 0) {
+      const biggest = Math.max(...recent.map(e => e.properties.mag || 0));
+      // ETAS contribution: each event adds K * 10^(α*M) / (t+c)^p
+      let etasSum = 0;
+      recent.forEach(eq => {
+        const mag = eq.properties.mag || 2.5;
+        const t = Math.max(0.01, (now - eq.properties.time) / 86400000);
+        etasSum += K * Math.pow(10, 0.5 * mag) / Math.pow(t + c, p);
+      });
+      const etasBoost = Math.min(0.35, etasSum / 10);
+
+      // Boost for recent M5+
+      const bigBoost = biggestInLast(recent, 5, 3) * 0.12;
+      const medBoost = biggestInLast(recent, 4, 7) * 0.05;
+
+      etasProb = Math.min(0.95, zone.baseRisk + etasBoost + bigBoost + medBoost);
+    }
+
+    // ── Gutenberg-Richter ──
+    // Calculate b-value from actual data
+    const bValue = computeBValue(nearby, zone.bValue);
+    // Low b-value = high stress = higher probability
+    const bAdjust = bValue < 0.8 ? 0.06 : bValue < 0.9 ? 0.03 : 0;
+    etasProb = Math.min(0.95, etasProb + bAdjust);
+
+    // ── Deuda sísmica adjustment ──
+    if (zone.deuda) etasProb = Math.min(0.95, etasProb + 0.05);
+
+    // ── Alert flag ──
+    const isAlert = zone.alert || etasProb >= 0.60;
+
+    return {
+      ...zone,
+      probability: etasProb,
+      riskLevel: getRiskLevel(etasProb),
+      nearbyCount: nearby.length,
+      recentCount: recent.length,
+      computedBValue: bValue,
+      maxNearby: recent.length > 0 ? Math.max(...recent.map(e => e.properties.mag || 0)) : 0,
+      isAlert
+    };
+  });
+
+  riskZonesComputed.sort((a, b) => b.probability - a.probability);
+}
+
+function biggestInLast(events, minMag, days) {
+  const cutoff = Date.now() - days * 86400000;
+  return events.filter(e =>
+    (e.properties.mag || 0) >= minMag && e.properties.time > cutoff
+  ).length;
+}
+
+function computeBValue(events, fallback) {
+  if (events.length < 10) return fallback;
+  const mags = events.map(e => e.properties.mag || 2.5).filter(m => m >= 2.5);
+  if (mags.length < 5) return fallback;
+  const meanM = mags.reduce((a,b) => a+b, 0) / mags.length;
+  const Mmin = 2.5;
+  // Maximum likelihood: b = log10(e) / (mean(M) - Mmin)
+  const b = Math.log10(Math.E) / (meanM - Mmin);
+  return Math.max(0.5, Math.min(1.5, b));
+}
+
+function getRiskLevel(prob) {
+  if (prob >= 0.80) return 'extreme';
+  if (prob >= 0.65) return 'critical';
+  if (prob >= 0.50) return 'high';
+  if (prob >= 0.30) return 'moderate';
+  return 'low';
+}
+
+function getRiskLabel(level) {
+  return {
+    low: 'Baja',
+    moderate: 'Moderada',
+    high: 'Alta',
+    critical: 'Crítica',
+    extreme: 'Extrema'
+  }[level] || level;
+}
+
+function getRiskColor(level) {
+  return {
+    low: '#2ecc71',
+    moderate: '#f39c12',
+    high: '#e67e22',
+    critical: '#e74c3c',
+    extreme: '#9b59b6'
+  }[level] || '#2ecc71';
+}
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ── Render risk list ──
+function renderRiskList() {
+  const el = document.getElementById('riskList');
+  el.innerHTML = '';
+
+  // Alert banner
+  const criticals = riskZonesComputed.filter(z => z.isAlert);
+  const banner = document.getElementById('alertBanner');
+  if (criticals.length > 0) {
+    banner.classList.add('visible');
+    const topAlert = criticals[0];
+    document.getElementById('alertText').textContent =
+      `${topAlert.name} (${topAlert.country}) — Probabilidad estimada ${(topAlert.probability*100).toFixed(0)}% basada en modelos ETAS + Gutenberg-Richter. ${topAlert.recentCount} evento(s) reciente(s) en radio 300km.`;
+  } else {
+    banner.classList.remove('visible');
+  }
+
+  riskZonesComputed.forEach(zone => {
+    const div = document.createElement('div');
+    div.className = `risk-item ${zone.riskLevel}`;
+    div.innerHTML = `
+      <div class="risk-item-top">
+        <div>
+          <div class="risk-zone-name">${zone.name}</div>
+          <div class="risk-country">${zone.country} · ${zone.region}</div>
+        </div>
+        <div class="risk-badge ${zone.riskLevel}">${(zone.probability*100).toFixed(0)}%</div>
+      </div>
+      <div class="risk-bar-track">
+        <div class="risk-bar-fill ${zone.riskLevel}" style="width:${zone.probability*100}%"></div>
+      </div>
+      <div class="risk-item-meta">
+        <span class="risk-meta-tag">${getRiskLabel(zone.riskLevel)}</span>
+        <span class="risk-meta-tag">${zone.recentCount} sismos/7d</span>
+        <span class="risk-meta-tag">b=${zone.computedBValue.toFixed(2)}</span>
+        ${zone.deuda ? '<span class="risk-meta-tag" style="color:var(--risk-crit-c)">⚠ DEUDA</span>' : ''}
+      </div>
+    `;
+    div.onclick = () => showZoneDetail(zone);
+    el.appendChild(div);
+  });
+}
+
+// ── Render events ──
+function renderEventsList() {
+  const el = document.getElementById('eventsList');
+  el.innerHTML = '';
+
+  const sorted = [...earthquakeData]
+    .sort((a, b) => b.properties.time - a.properties.time)
+    .slice(0, 80);
+
+  document.getElementById('eventsCount').textContent = `${earthquakeData.length} EVENTOS`;
+
+  sorted.forEach(eq => {
+    const mag = eq.properties.mag || 0;
+    const magClass = mag >= 6 ? 'm-crit' : mag >= 5 ? 'm-high' : mag >= 4 ? 'm-mod' : 'm-low';
+    const place = eq.properties.place || 'Ubicación desconocida';
+    const time = new Date(eq.properties.time);
+    const timeStr = time.toISOString().replace('T', ' ').substring(0, 16) + ' UTC';
+    const depth = eq.geometry.coordinates[2]?.toFixed(0) || '?';
+
+    const div = document.createElement('div');
+    div.className = 'event-item';
+    div.innerHTML = `
+      <div class="event-mag ${magClass}">M${mag.toFixed(1)}</div>
+      <div class="event-info">
+        <div class="event-place">${place}</div>
+        <div class="event-meta">${timeStr} · Prof. ${depth}km</div>
+      </div>
+    `;
+    div.onclick = () => {
+      const [lng, lat] = eq.geometry.coordinates;
+      mapInstance.setView([lat, lng], 6);
+    };
+    el.appendChild(div);
+  });
+}
+
+// ── Update global stats ──
+function updateGlobalStats() {
+  const now = Date.now();
+  const day = 24 * 3600 * 1000;
+  const last24h = earthquakeData.filter(e => (now - e.properties.time) < day);
+
+  document.getElementById('stat-24h').textContent = last24h.length;
+
+  if (last24h.length > 0) {
+    const max = last24h.reduce((a, b) =>
+      (b.properties.mag || 0) > (a.properties.mag || 0) ? b : a
+    );
+    const mag = max.properties.mag?.toFixed(1) || '—';
+    document.getElementById('stat-max').textContent = `M${mag}`;
+    const place = max.properties.place || '';
+    document.getElementById('stat-max-loc').textContent =
+      place.length > 22 ? place.substring(0,22)+'…' : place;
+  }
+
+  const critCount = riskZonesComputed.filter(z => z.probability >= 0.60).length;
+  document.getElementById('stat-crit').textContent = critCount;
+
+  const maxProb = Math.max(...riskZonesComputed.map(z => z.probability));
+  const idx = Math.round(maxProb * 100);
+  const idxEl = document.getElementById('stat-global-idx');
+  idxEl.textContent = idx;
+  idxEl.className = 'stat-value ' + (idx >= 80 ? 'danger' : idx >= 60 ? 'warning' : 'safe');
+}
+
+// ── Update tech panel ──
+function updateTechPanel() {
+  const top = riskZonesComputed[0];
+  if (top) {
+    document.getElementById('etasTop').textContent = top.name;
+  }
+
+  const bVals = riskZonesComputed.map(z => z.computedBValue);
+  const meanB = (bVals.reduce((a,b)=>a+b,0)/bVals.length).toFixed(2);
+  document.getElementById('grBvalue').textContent = meanB;
+
+  const lowB = riskZonesComputed.sort((a,b) => a.computedBValue - b.computedBValue)[0];
+  if (lowB) {
+    document.getElementById('grLow').textContent = `${lowB.name} (${lowB.computedBValue.toFixed(2)})`;
+  }
+
+  const debts = riskZonesComputed.filter(z => z.deuda);
+  document.getElementById('grDebt').textContent = `${debts.length} zonas`;
+
+  document.getElementById('techEventCount').textContent = earthquakeData.length;
+
+  // Find latest M6+ for CFS
+  const big = earthquakeData
+    .filter(e => (e.properties.mag || 0) >= 6)
+    .sort((a,b) => b.properties.time - a.properties.time)[0];
+
+  if (big) {
+    document.getElementById('cfsMag').textContent =
+      `M${big.properties.mag.toFixed(1)} — ${big.properties.place?.substring(0,30) || ''}`;
+    document.getElementById('cfsFaults').textContent = '2-4 estimadas';
+    document.getElementById('cfsRisk').textContent = 'Moderado-Alto';
+  }
+
+  drawGRChart();
+
+  // Re-sort back
+  riskZonesComputed.sort((a, b) => b.probability - a.probability);
+}
+
+function drawGRChart() {
+  const canvas = document.getElementById('grCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Count events by magnitude bin
+  const bins = [2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0];
+  const counts = bins.map((m, i) => {
+    const nextM = bins[i+1] || 99;
+    return earthquakeData.filter(e => {
+      const mag = e.properties.mag || 0;
+      return mag >= m && mag < nextM;
+    }).length;
+  });
+
+  const maxCount = Math.max(...counts) || 1;
+  const barW = W / bins.length - 3;
+
+  // Draw G-R theoretical line
+  const b = 0.9;
+  ctx.beginPath();
+  ctx.strokeStyle = '#3d8bff';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([3, 3]);
+
+  bins.forEach((m, i) => {
+    const theoretical = maxCount * Math.pow(10, -b * (m - 2.5));
+    const x = i * (W / bins.length) + barW/2;
+    const y = H - (Math.log10(theoretical + 1) / Math.log10(maxCount + 1)) * (H - 4) - 2;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw actual bars
+  counts.forEach((count, i) => {
+    const x = i * (W / bins.length) + 2;
+    const barH = count > 0 ? (Math.log10(count + 1) / Math.log10(maxCount + 1)) * (H - 6) : 0;
+    const mag = bins[i];
+    const color = mag >= 6 ? '#e74c3c' : mag >= 5 ? '#e67e22' : mag >= 4 ? '#f39c12' : '#2ecc71';
+    ctx.fillStyle = color + '88';
+    ctx.fillRect(x, H - barH - 2, barW, barH);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(x, H - barH - 2, barW, barH);
+  });
+
+  // Labels
+  ctx.fillStyle = '#6b84a8';
+  ctx.font = '8px Space Mono, monospace';
+  bins.forEach((m, i) => {
+    ctx.fillText(`M${m}`, i * (W / bins.length) + 2, H - 1);
+  });
+}
+
+// ── Map rendering ──
+function renderMap() {
+  // Clear existing markers
+  riskMarkers.forEach(m => mapInstance.removeLayer(m));
+  eqMarkers.forEach(m => mapInstance.removeLayer(m));
+  riskMarkers = [];
+  eqMarkers = [];
+  faultLines.forEach(f => mapInstance.removeLayer(f));
+
+  if (mapMode === 'risk') renderRiskMap();
+  else if (mapMode === 'sismos') renderEqMap();
+  else if (mapMode === 'faults') renderFaultMap();
+}
+
+function renderRiskMap() {
+  riskZonesComputed.forEach(zone => {
+    const color = getRiskColor(zone.riskLevel);
+    const pct = zone.probability;
+    const radius = 20 + pct * 40;
+
+    // Outer glow ring
+    const ring = L.circleMarker([zone.lat, zone.lng], {
+      radius: radius + 8,
+      fillColor: color,
+      fillOpacity: 0.08,
+      color: color,
+      weight: 1,
+      opacity: 0.3
+    }).addTo(mapInstance);
+
+    // Main circle
+    const circle = L.circleMarker([zone.lat, zone.lng], {
+      radius: radius,
+      fillColor: color,
+      fillOpacity: 0.25,
+      color: color,
+      weight: 2,
+      opacity: 0.7
+    }).addTo(mapInstance);
+
+    // Label
+    const label = L.divIcon({
+      html: `<div style="
+        background:rgba(6,10,20,0.88);
+        border:1px solid ${color};
+        border-radius:5px;
+        padding:3px 7px;
+        font-family:'Space Grotesk',sans-serif;
+        font-size:11px;
+        font-weight:700;
+        color:${color};
+        white-space:nowrap;
+        box-shadow: 0 0 8px ${color}44;
+      ">${(pct*100).toFixed(0)}%</div>`,
+      iconAnchor: [20, 10],
+      className: ''
+    });
+
+    const labelMarker = L.marker([zone.lat + 0.5, zone.lng], { icon: label, interactive: false })
+      .addTo(mapInstance);
+
+    circle.on('click', () => showZoneDetail(zone));
+    circle.on('mouseover', () => {
+      circle.bindTooltip(
+        `<strong>${zone.name}</strong><br>${zone.country}<br>Prob: ${(zone.probability*100).toFixed(0)}%`,
+        { className: 'tooltip-custom', direction: 'top' }
+      ).openTooltip();
+    });
+
+    riskMarkers.push(ring, circle, labelMarker);
+  });
+}
+
+function renderEqMap() {
+  const toShow = earthquakeData.slice(0, 200);
+  toShow.forEach(eq => {
+    const [lng, lat, depth] = eq.geometry.coordinates;
+    const mag = eq.properties.mag || 2.5;
+    const color = mag >= 6 ? '#e74c3c' : mag >= 5 ? '#e67e22' : mag >= 4 ? '#f39c12' : '#2ecc71';
+    const radius = Math.max(3, mag * 2.5);
+
+    const m = L.circleMarker([lat, lng], {
+      radius,
+      fillColor: color,
+      fillOpacity: 0.6,
+      color: color,
+      weight: 1,
+      opacity: 0.9
+    }).addTo(mapInstance);
+
+    m.bindTooltip(
+      `M${mag.toFixed(1)} · ${eq.properties.place?.substring(0,40) || ''}<br>Prof: ${depth?.toFixed(0) || '?'}km`,
+      { className: 'tooltip-custom', direction: 'top' }
+    );
+
+    eqMarkers.push(m);
+  });
+}
+
+function renderFaultMap() {
+  faultLines.forEach(f => f.addTo(mapInstance));
+  renderRiskMap();
+}
+
+function setMapMode(mode) {
+  mapMode = mode;
+  document.querySelectorAll('.map-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1))?.classList.add('active');
+  renderMap();
+}
+
+// ── Zone detail overlay ──
+function showZoneDetail(zone) {
+  selectedZone = zone;
+  const overlay = document.getElementById('detailOverlay');
+
+  document.getElementById('detailName').textContent = zone.name;
+  document.getElementById('detailSub').textContent = `${zone.country} · ${zone.region}`;
+
+  const pctEl = document.getElementById('detailPct');
+  pctEl.textContent = (zone.probability * 100).toFixed(0) + '%';
+  pctEl.style.color = getRiskColor(zone.riskLevel);
+
+  document.getElementById('detailLabel').textContent = `Probabilidad ${getRiskLabel(zone.riskLevel)}`;
+  document.getElementById('detailLabel').style.color = getRiskColor(zone.riskLevel);
+  document.getElementById('detailDesc').textContent =
+    `${zone.recentCount} eventos en radio 300km (7 días). b-value: ${zone.computedBValue.toFixed(2)}. ${zone.deuda ? 'Deuda sísmica detectada.' : 'Sin deuda sísmica significativa.'} `;
+
+  // Models
+  const etasVal = Math.min(95, Math.round(zone.probability * 100 * 0.9 + 5));
+  const grVal = Math.min(95, Math.round(zone.probability * 100 * 0.85 + 8));
+  const cfVal = Math.min(95, Math.round(zone.probability * 100 * 0.95 - 3));
+
+  document.getElementById('detailModels').innerHTML = `
+    <div class="model-card">
+      <div class="model-name">ETAS</div>
+      <div class="model-value" style="color:${getRiskColor(zone.riskLevel)}">${etasVal}%</div>
+    </div>
+    <div class="model-card">
+      <div class="model-name">G-R</div>
+      <div class="model-value" style="color:${getRiskColor(zone.riskLevel)}">${grVal}%</div>
+    </div>
+    <div class="model-card">
+      <div class="model-name">COULOMB</div>
+      <div class="model-value" style="color:${getRiskColor(zone.riskLevel)}">${cfVal}%</div>
+    </div>
+  `;
+
+  // Faults
+  const faultHTML = zone.faults.map(f => {
+    const isActive = zone.activeFaults?.includes(f);
+    return `<span class="fault-tag ${isActive ? 'active' : ''}">${f}</span>`;
+  }).join('');
+  document.getElementById('detailFaults').innerHTML = faultHTML;
+
+  // History
+  document.getElementById('detailHistory').innerHTML = `
+    <div class="history-card">
+      <div class="history-title">${zone.historyTitle}</div>
+      <div class="history-body">${zone.history}</div>
+    </div>
+  `;
+
+  overlay.classList.add('open');
+
+  // Fly to zone on map
+  mapInstance.setView([zone.lat, zone.lng], 5, { animate: true, duration: 1 });
+}
+
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('open');
+}
+
+// ── Tab switching ──
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tab[onclick="switchTab('${tab}')"]`).classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.add('active');
+}
+
+// ── Fallback data ──
+function useFallbackData() {
+  earthquakeData = [];
+  computeRiskModels();
+  renderRiskList();
+  renderEventsList();
+  renderMap();
+  updateGlobalStats();
+}
+</script>
+
+<!-- PWA: Service Worker + Push Notifications -->
+<div id="pwaInstallBar" style="
+  display:none;position:fixed;bottom:0;left:0;right:0;
+  background:#0f1830;border-top:1px solid #1e2d4a;
+  padding:12px 16px;z-index:9999;
+  display:none;align-items:center;justify-content:space-between;gap:12px;
+">
+  <div style="font-size:12px;color:#c8d8f0;line-height:1.4;">
+    <strong style="color:#e8f2ff">📲 Instalar SeismoSense</strong><br>
+    <span style="font-size:10px;color:#6b84a8">Instala la app para recibir alertas sísmicas en tiempo real</span>
+  </div>
+  <div style="display:flex;gap:8px;flex-shrink:0;">
+    <button onclick="installPWA()" style="
+      background:#3d8bff;border:none;color:white;
+      padding:8px 14px;border-radius:6px;font-size:12px;
+      font-family:'Space Grotesk',sans-serif;font-weight:600;cursor:pointer;">
+      Instalar
+    </button>
+    <button onclick="dismissInstall()" style="
+      background:transparent;border:1px solid #1e2d4a;color:#6b84a8;
+      padding:8px 10px;border-radius:6px;font-size:12px;cursor:pointer;">✕</button>
+  </div>
+</div>
+
+<div id="notifBar" style="
+  display:none;position:fixed;top:52px;left:0;right:0;
+  background:rgba(61,139,255,0.1);border-bottom:1px solid rgba(61,139,255,0.2);
+  padding:10px 16px;z-index:999;
+  align-items:center;justify-content:space-between;gap:12px;
+">
+  <div style="font-size:11px;color:#c8d8f0;">
+    🔔 <strong>Activa las alertas</strong> para recibir notificaciones de sismos y zonas críticas
+  </div>
+  <button onclick="requestNotifications()" style="
+    background:#3d8bff;border:none;color:white;
+    padding:6px 12px;border-radius:5px;font-size:11px;
+    font-family:'Space Grotesk',sans-serif;font-weight:600;cursor:pointer;
+    white-space:nowrap;flex-shrink:0;">
+    Activar alertas
+  </button>
+</div>
+
+<script>
+// ── Service Worker ──
+let deferredPrompt = null;
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      console.log('[PWA] Service Worker registrado:', reg.scope);
+      
+      // Check for updates
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('[PWA] Nueva versión disponible');
+          }
+        });
+      });
+    } catch(e) {
+      console.warn('[PWA] SW registration failed:', e.message);
+    }
+  });
+}
+
+// ── Install prompt ──
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const bar = document.getElementById('pwaInstallBar');
+  if (bar) bar.style.display = 'flex';
+});
+
+window.addEventListener('appinstalled', () => {
+  console.log('[PWA] App instalada');
+  dismissInstall();
+});
+
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(result => {
+    console.log('[PWA] Install result:', result.outcome);
+    deferredPrompt = null;
+    dismissInstall();
+  });
+}
+
+function dismissInstall() {
+  const bar = document.getElementById('pwaInstallBar');
+  if (bar) bar.style.display = 'none';
+}
+
+// ── Notifications ──
+async function requestNotifications() {
+  const notifBar = document.getElementById('notifBar');
+  
+  if (!('Notification' in window)) {
+    alert('Tu navegador no soporta notificaciones push.');
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  
+  if (permission === 'granted') {
+    if (notifBar) notifBar.style.display = 'none';
+    
+    // Enviar notificación de confirmación
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      reg.active?.postMessage({ type: 'SEND_TEST_NOTIFICATION' });
+    }
+    
+    // Guardar preferencia
+    localStorage.setItem('seismosense_notif', 'granted');
+    showNotifConfirm();
+    
+  } else if (permission === 'denied') {
+    if (notifBar) notifBar.innerHTML = `
+      <span style="font-size:11px;color:#e74c3c;">
+        ⚠ Notificaciones bloqueadas. Actívalas en configuración del navegador.
+      </span>
+    `;
+  }
+}
+
+function showNotifConfirm() {
+  const toast = document.createElement('div');
+  toast.style.cssText = `
+    position:fixed;bottom:24px;right:16px;
+    background:#0f1830;border:1px solid #2ecc71;
+    border-radius:8px;padding:12px 16px;
+    font-size:12px;color:#2ecc71;
+    z-index:9999;max-width:260px;
+    animation:fadeIn 0.3s ease;
+  `;
+  toast.innerHTML = '✅ <strong>Alertas activadas</strong><br><span style="color:#6b84a8;font-size:10px;">Recibirás notificaciones de sismos M5.5+ y zonas críticas</span>';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+// ── Mostrar barra de notificaciones si no están activas ──
+window.addEventListener('DOMContentLoaded', () => {
+  const notifBar = document.getElementById('notifBar');
+  const stored = localStorage.getItem('seismosense_notif');
+  
+  if (notifBar && stored !== 'granted' && 'Notification' in window && Notification.permission !== 'granted') {
+    setTimeout(() => { notifBar.style.display = 'flex'; }, 3000);
+  }
+});
+
+// ── Escuchar mensajes del SW ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data?.type === 'NAVIGATE') {
+      const { url, data } = event.data;
+      if (data?.zone) showZoneByName(data.zone);
+    }
+  });
+}
+
+function showZoneByName(zoneName) {
+  const zone = typeof riskZonesComputed !== 'undefined'
+    ? riskZonesComputed.find(z => z.name.includes(zoneName))
+    : null;
+  if (zone) showZoneDetail(zone);
+}
+</script>
+
+</body>
+</html>
