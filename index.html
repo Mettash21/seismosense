@@ -1869,21 +1869,27 @@ function useFallbackData() {
 </div>
 
 <div id="notifBar" style="
-  display:none;position:fixed;top:52px;left:0;right:0;
-  background:rgba(61,139,255,0.1);border-bottom:1px solid rgba(61,139,255,0.2);
-  padding:10px 16px;z-index:999;
-  align-items:center;justify-content:space-between;gap:12px;
+  display:none;position:fixed;top:62px;right:16px;
+  background:#0f1830;border:1px solid rgba(61,139,255,0.3);
+  border-radius:10px;padding:12px 14px;z-index:999;
+  flex-direction:column;gap:8px;max-width:240px;
+  box-shadow:0 4px 20px rgba(0,0,0,0.5);
 ">
-  <div style="font-size:11px;color:#c8d8f0;">
-    🔔 <strong>Activa las alertas</strong> para recibir notificaciones de sismos y zonas críticas
+  <div style="font-size:11px;color:#c8d8f0;line-height:1.4;">
+    🔔 <strong style="color:#e8f2ff;">Activa las alertas</strong><br>
+    <span style="font-size:10px;color:#6b84a8;">Notificaciones de sismos M5.5+ y zonas críticas</span>
   </div>
-  <button onclick="requestNotifications()" style="
-    background:#3d8bff;border:none;color:white;
-    padding:6px 12px;border-radius:5px;font-size:11px;
-    font-family:'Space Grotesk',sans-serif;font-weight:600;cursor:pointer;
-    white-space:nowrap;flex-shrink:0;">
-    Activar alertas
-  </button>
+  <div style="display:flex;gap:6px;">
+    <button onclick="requestNotifications()" style="
+      flex:1;background:#3d8bff;border:none;color:white;
+      padding:6px 10px;border-radius:6px;font-size:11px;
+      font-family:'Space Grotesk',sans-serif;font-weight:600;cursor:pointer;">
+      Activar
+    </button>
+    <button onclick="document.getElementById('notifBar').style.display='none'" style="
+      background:transparent;border:1px solid #1e2d4a;color:#6b84a8;
+      padding:6px 8px;border-radius:6px;font-size:12px;cursor:pointer;">✕</button>
+  </div>
 </div>
 
 <script>
