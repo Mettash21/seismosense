@@ -1157,12 +1157,18 @@ let selectedZone = null;
 let riskZonesComputed = [];
 
 // ── Init ──
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
   initMap();
   updateClock();
   setInterval(updateClock, 1000);
-  await loadUSGSData();
-  setInterval(loadUSGSData, 300000); // refresh 5min
+
+  // MOSTRAR INSTANTÁNEO — nunca bloquear al usuario
+  useFallbackData();
+  hideLoading();
+
+  // Actualizar con USGS real en segundo plano
+  setTimeout(() => loadUSGSBackground(), 800);
+  setInterval(() => loadUSGSBackground(), 300000);
 });
 
 function updateClock() {
@@ -1239,51 +1245,46 @@ async function fetchWithTimeout(url, ms = 8000) {
   }
 }
 
-async function loadUSGSData() {
-  setLoadingText('CONECTANDO CON USGS...');
-
-  // Try multiple USGS feeds in order (fallback to smaller if large fails)
+// Carga silenciosa en segundo plano — no bloquea la UI
+async function loadUSGSBackground() {
   const FEEDS = [
     'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson',
     'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson',
     'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson',
   ];
 
-  let loaded = false;
-
   for (const url of FEEDS) {
     try {
-      setLoadingText('CONECTANDO CON USGS...');
-      const res = await fetchWithTimeout(url, 9000);
+      const res = await fetchWithTimeout(url, 10000);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      earthquakeData = data.features || [];
-      loaded = true;
-      break;
+      if (!data.features || data.features.length === 0) throw new Error('Empty');
+
+      earthquakeData = data.features;
+
+      // Actualizar UI silenciosamente
+      computeRiskModels();
+      renderRiskList();
+      renderEventsList();
+      renderMap();
+      updateGlobalStats();
+      updateTechPanel();
+
+      // Mostrar indicador de datos en vivo
+      const badge = document.querySelector('.live-badge');
+      if (badge) badge.style.color = 'var(--risk-low-c)';
+
+      console.log(`[SeismoSense] USGS actualizado: ${earthquakeData.length} eventos`);
+      return; // éxito, salir del loop
     } catch(e) {
-      console.warn('USGS feed failed, trying next:', url, e.message);
+      console.warn('[SeismoSense] Feed falló, intentando siguiente:', e.message);
     }
   }
-
-  if (!loaded) {
-    console.error('All USGS feeds failed — using fallback');
-    setLoadingText('USANDO DATOS DE RESPALDO...');
-    useFallbackData();
-    hideLoading();
-    return;
-  }
-
-  setLoadingText('CALCULANDO MODELOS ETAS...');
-  await sleep(200);
-
-  computeRiskModels();
-  renderRiskList();
-  renderEventsList();
-  renderMap();
-  updateGlobalStats();
-  updateTechPanel();
-  hideLoading();
+  console.warn('[SeismoSense] Todos los feeds USGS fallaron — manteniendo datos actuales');
 }
+
+// Mantener compatibilidad
+async function loadUSGSData() { return loadUSGSBackground(); }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
