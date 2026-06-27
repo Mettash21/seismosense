@@ -734,6 +734,7 @@ header {
 .loading-overlay.hidden {
   opacity: 0;
   pointer-events: none;
+  display: none !important;
 }
 
 .loading-seismo {
@@ -1156,18 +1157,26 @@ let earthquakeData = [];
 let selectedZone = null;
 let riskZonesComputed = [];
 
+// Ocultar loading tan pronto como el script corre
+function hideLoading() {
+  const overlay = document.getElementById('loadingOverlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
+  }
+}
+
 // ── Init ──
 document.addEventListener('DOMContentLoaded', () => {
+  hideLoading(); // primero de todo
+
   initMap();
   updateClock();
   setInterval(updateClock, 1000);
 
-  // MOSTRAR INSTANTÁNEO — nunca bloquear al usuario
   useFallbackData();
-  hideLoading();
 
-  // Actualizar con USGS real en segundo plano
-  setTimeout(() => loadUSGSBackground(), 800);
+  setTimeout(() => loadUSGSBackground(), 1000);
   setInterval(() => loadUSGSBackground(), 300000);
 });
 
@@ -1291,13 +1300,6 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function setLoadingText(t) {
   const el = document.getElementById('loadingText');
   if (el) el.textContent = t;
-}
-
-function hideLoading() {
-  setTimeout(() => {
-    const overlay = document.getElementById('loadingOverlay');
-    if (overlay) overlay.classList.add('hidden');
-  }, 600);
 }
 
 // ── Statistical Models ──
