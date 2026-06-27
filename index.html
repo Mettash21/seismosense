@@ -492,7 +492,7 @@ header {
   font-family: 'Space Grotesk', sans-serif !important;
 }
 
-.leaflet-tile-pane { filter: brightness(0.7) saturate(0.5) hue-rotate(180deg); }
+.leaflet-tile-pane { opacity: 0.9; }
 
 /* Map overlay controls */
 .map-controls {
@@ -1195,9 +1195,12 @@ function initMap() {
     attributionControl: false
   });
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // Usar CartoDB Dark Matter — más confiable y visualmente mejor para datos sísmicos
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     maxZoom: 18,
-    opacity: 0.6
+    opacity: 0.85,
+    subdomains: 'abcd',
+    attribution: '© CartoDB'
   }).addTo(mapInstance);
 
   // Draw major fault lines (simplified)
