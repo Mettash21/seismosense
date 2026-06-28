@@ -2538,21 +2538,49 @@ async function requestNotifications() {
 
     console.log('[Push] Suscripción obtenida:', subscription.endpoint.substring(0, 60) + '...');
 
-    // 4. Enviar suscripción al servidor
+    // 4. Suscribir al topic FCM via servidor
     try {
-      await fetch('/api/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subscription: subscription.toJSON(),
-          zone: 'global',
-          lang: currentLang,
-          timestamp: Date.now()
-        })
+      // Primero registrar el token FCM
+      const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+      const { getMessaging, getToken, onMessage } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js');
+
+      const firebaseApp = getApps().length === 0
+        ? initializeApp(FIREBASE_CONFIG)
+        : getApps()[0];
+
+      const messaging = getMessaging(firebaseApp);
+
+      const fcmToken = await getToken(messaging, { 
+        vapidKey: VAPID_PUBLIC_KEY,
+        serviceWorkerRegistration: reg
       });
-      console.log('[Push] Suscripción enviada al servidor');
-    } catch(e) {
-      console.warn('[Push] No se pudo guardar en servidor, funcionará localmente:', e.message);
+
+      if (fcmToken) {
+        console.log('[FCM] Token obtenido:', fcmToken.substring(0, 30) + '...');
+        localStorage.setItem('seismosense_fcm_token', fcmToken);
+
+        // Guardar token en servidor para envío de notificaciones
+        await fetch('/api/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fcmToken,
+            subscription: subscription.toJSON(),
+            zone: 'global',
+            lang: currentLang,
+            timestamp: Date.now()
+          })
+        }).catch(e => console.warn('[FCM] No se pudo guardar token:', e.message));
+
+        // Escuchar mensajes cuando la app está abierta
+        onMessage(messaging, payload => {
+          console.log('[FCM] Mensaje recibido en foreground:', payload);
+          const { title, body } = payload.notification || {};
+          if (title) showToast(`🔔 ${title}<br><span style="font-size:10px;color:#6b84a8">${body}</span>`, 'info');
+        });
+      }
+    } catch(fcmError) {
+      console.warn('[FCM] Error al obtener token, usando Web Push básico:', fcmError.message);
     }
 
     // 5. Guardar localmente
