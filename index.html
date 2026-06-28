@@ -781,13 +781,14 @@ header {
 }
 
 .tooltip-custom {
-  background: var(--panel) !important;
-  border: 1px solid var(--border) !important;
-  color: var(--text) !important;
+  background: rgba(255,255,255,0.96) !important;
+  border: 1px solid #ddd !important;
+  color: #1a1a2e !important;
   font-family: 'Space Grotesk', sans-serif !important;
   font-size: 11px !important;
   border-radius: 6px !important;
   padding: 6px 10px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
 }
 </style>
 </head>
@@ -960,6 +961,10 @@ header {
         <div class="tech-section">
           <div class="tech-title">📡 FUENTES DE DATOS</div>
           <div class="tech-row">
+            <span class="tech-key">Fuentes activas</span>
+            <span class="tech-val ok" id="activeSources">—</span>
+          </div>
+          <div class="tech-row">
             <span class="tech-key">USGS GeoJSON Feed</span>
             <span class="tech-val ok">● ACTIVO</span>
           </div>
@@ -1033,117 +1038,130 @@ header {
 const RISK_ZONES = [
   {
     id: 'eje-cafetero', name: 'Eje Cafetero', country: 'Colombia',
-    lat: 4.5, lng: -75.7,
+    lat: 4.5, lng: -75.7, radioKm: 150,
+    bbox: { minLat: 3.0, maxLat: 6.0, minLng: -77.5, maxLng: -74.0 },
     faults: ['Romeral', 'Silvia-Pijao', 'Cauca-Almaguer'], activeFaults: ['Silvia-Pijao'],
-    baseRisk: 0.48, bValue: 0.82,
+    baseRisk: 0.38, bValue: 0.82,
     history: 'M6.2 Armenia, 25 ene 1999 — 1.900 muertos. Falla Silvia-Pijao sin romper desde entonces. Deuda sísmica acumulada ~27 años.',
     historyTitle: 'CASO: TERREMOTO DEL QUINDÍO 1999',
-    deuda: true, region: 'Andes Colombianos'
+    deuda: true, region: 'Andes Colombianos', yearsSinceLastMajor: 26
   },
   {
     id: 'bucaramanga', name: 'Nido Sísmico Bucaramanga', country: 'Colombia',
-    lat: 7.0, lng: -73.1,
+    lat: 7.0, lng: -73.1, radioKm: 120,
+    bbox: { minLat: 5.5, maxLat: 8.5, minLng: -74.5, maxLng: -71.5 },
     faults: ['Boconó', 'Bucaramanga-Santa Marta'], activeFaults: ['Boconó'],
-    baseRisk: 0.41, bValue: 0.71,
+    baseRisk: 0.32, bValue: 0.71,
     history: 'Nido sísmico más activo de Colombia. 60% de sismicidad nacional. Hasta 20 sismos/día a 150km profundidad. Falla Boconó conecta con Venezuela.',
     historyTitle: 'NIDO SÍSMICO — MAYOR ACTIVIDAD COLOMBIA',
     deuda: false, region: 'Santander'
   },
   {
     id: 'yaracuy-venezuela', name: 'Sistema Oca-Boconó', country: 'Venezuela',
-    lat: 10.5, lng: -68.8,
+    lat: 10.5, lng: -68.8, radioKm: 350,
+    bbox: { minLat: 8.0, maxLat: 12.5, minLng: -72.0, maxLng: -62.0 },
     faults: ['Falla de Oca', 'Boconó', 'San Sebastián'], activeFaults: ['Falla de Oca', 'Boconó'],
-    baseRisk: 0.78, bValue: 0.65,
+    baseRisk: 0.65, bValue: 0.65,
     history: 'Doblete M7.2+M7.5 el 24 jun 2026 — 920+ fallecidos. Liberación de energía acumulada ~100 años. Réplicas continuas. ΔCFS positivo en fallas vecinas hacia Colombia.',
     historyTitle: '⚡ EVENTO ACTIVO — 24 JUN 2026',
     deuda: false, region: 'Norte Venezuela', alert: true
   },
   {
     id: 'ring-fire-chile', name: 'Norte Chile (Zona Subducción)', country: 'Chile',
-    lat: -22.0, lng: -69.5,
+    lat: -22.0, lng: -69.5, radioKm: 400,
+    bbox: { minLat: -28.0, maxLat: -16.0, minLng: -72.0, maxLng: -67.0 },
     faults: ['Falla de Atacama', 'Zona Subducción Nazca'], activeFaults: ['Zona Subducción Nazca'],
-    baseRisk: 0.72, bValue: 0.88,
+    baseRisk: 0.55, bValue: 0.88,
     history: 'Zona de subducción activa. M8.0+ posible. Segmento norte sin ruptura mayor desde 1877 (M8.7). Deuda sísmica estimada >150 años.',
     historyTitle: 'LAGUNA SÍSMICA — DEUDA >145 AÑOS',
-    deuda: true, region: 'Atacama'
+    deuda: true, region: 'Atacama', yearsSinceLastMajor: 148
   },
   {
     id: 'cascadia', name: 'Cascadia Subduction Zone', country: 'EE.UU./Canadá',
-    lat: 47.5, lng: -124.0,
+    lat: 47.5, lng: -124.0, radioKm: 500,
+    bbox: { minLat: 40.0, maxLat: 52.0, minLng: -128.0, maxLng: -120.0 },
     faults: ['Cascadia Megathrust'], activeFaults: ['Cascadia Megathrust'],
-    baseRisk: 0.68, bValue: 0.79,
+    baseRisk: 0.52, bValue: 0.79,
     history: 'Última gran ruptura: 1700 (M~9.0). Probabilidad 14% de M8+ en próximos 50 años según USGS. Potencial tsunami Océano Pacífico.',
     historyTitle: 'MEGATHRUST — RIESGO REGIONAL ALTO',
-    deuda: true, region: 'Pacífico Noroeste'
+    deuda: true, region: 'Pacífico Noroeste', yearsSinceLastMajor: 325
   },
   {
     id: 'nepal-himalaya', name: 'Himalaya Central', country: 'Nepal/India',
-    lat: 28.0, lng: 84.5,
+    lat: 28.0, lng: 84.5, radioKm: 300,
+    bbox: { minLat: 25.0, maxLat: 31.0, minLng: 78.0, maxLng: 92.0 },
     faults: ['Main Himalayan Thrust', 'Main Boundary Thrust'], activeFaults: ['Main Himalayan Thrust'],
-    baseRisk: 0.64, bValue: 0.91,
+    baseRisk: 0.50, bValue: 0.91,
     history: 'M7.8 Gorkha 2015 — 9.000 muertos. Segmentos al oeste sin ruptura histórica reciente. Convergencia ~20mm/año India-Eurasia.',
     historyTitle: 'POST-GORKHA: SEGMENTOS ADYACENTES',
-    deuda: true, region: 'Asia Central'
+    deuda: true, region: 'Asia Central', yearsSinceLastMajor: 11
   },
   {
     id: 'turkey-east', name: 'Falla Anatolia Oriental', country: 'Türkiye',
-    lat: 37.5, lng: 38.0,
+    lat: 37.5, lng: 38.0, radioKm: 300,
+    bbox: { minLat: 35.0, maxLat: 40.0, minLng: 26.0, maxLng: 45.0 },
     faults: ['East Anatolian Fault', 'Dead Sea Fault'], activeFaults: ['East Anatolian Fault'],
-    baseRisk: 0.71, bValue: 0.76,
+    baseRisk: 0.55, bValue: 0.76,
     history: 'M7.8 Kahramanmaraş feb 2023 — 57.000 muertos. Segmento norte EAF recibió estrés de Coulomb positivo. Actividad elevada post-evento.',
     historyTitle: 'POST-KAHRAMANMARAŞ 2023',
     deuda: false, region: 'Anatolia'
   },
   {
     id: 'japan-nankai', name: 'Nankai Trough', country: 'Japón',
-    lat: 33.0, lng: 136.0,
+    lat: 33.0, lng: 136.0, radioKm: 350,
+    bbox: { minLat: 29.0, maxLat: 37.0, minLng: 130.0, maxLng: 142.0 },
     faults: ['Nankai Megathrust'], activeFaults: ['Nankai Megathrust'],
-    baseRisk: 0.83, bValue: 0.93,
+    baseRisk: 0.65, bValue: 0.93,
     history: 'JMA elevó alerta a máximo en ago 2024 tras M7.1. Probabilidad 70-80% de M8-9 en próximos 30 años. Potencial 300.000+ víctimas sin preparación.',
     historyTitle: 'ALERTA MÁXIMA JMA — MEGAEVENETO ESPERADO',
-    deuda: true, region: 'Pacífico Japón'
+    deuda: true, region: 'Pacífico Japón', yearsSinceLastMajor: 80
   },
   {
     id: 'iran-zagros', name: 'Sistema Zagros', country: 'Irán',
-    lat: 33.0, lng: 48.0,
+    lat: 33.0, lng: 48.0, radioKm: 350,
+    bbox: { minLat: 28.0, maxLat: 38.0, minLng: 43.0, maxLng: 58.0 },
     faults: ['Main Zagros Thrust', 'Main Recent Fault'], activeFaults: ['Main Recent Fault'],
-    baseRisk: 0.54, bValue: 0.85,
+    baseRisk: 0.42, bValue: 0.85,
     history: 'Zona de colisión Arabia-Eurasia. M7.3 Kermanshah 2017 — 620 muertos. Alta frecuencia M5-6. Infraestructura vulnerable.',
     historyTitle: 'COLISIÓN TECTÓNICA ACTIVA',
     deuda: false, region: 'Oriente Medio'
   },
   {
     id: 'california-san-andreas', name: 'Falla San Andrés Sur', country: 'EE.UU.',
-    lat: 34.0, lng: -117.5,
+    lat: 34.0, lng: -117.5, radioKm: 250,
+    bbox: { minLat: 31.0, maxLat: 37.0, minLng: -120.0, maxLng: -114.0 },
     faults: ['San Andreas Fault', 'San Jacinto Fault'], activeFaults: ['San Andreas Fault'],
-    baseRisk: 0.60, bValue: 1.02,
+    baseRisk: 0.48, bValue: 1.02,
     history: '"The Big One" esperado. Segmento sur sin ruptura mayor desde ~1690. Desplazamiento lateral acumulado estimado 7-8 metros. Los Ángeles en zona crítica.',
     historyTitle: '"THE BIG ONE" — DEUDA SÍSMICA >300 AÑOS',
-    deuda: true, region: 'California Sur'
+    deuda: true, region: 'California Sur', yearsSinceLastMajor: 335
   },
   {
     id: 'mexico-guerrero', name: 'Laguna de Guerrero', country: 'México',
-    lat: 17.5, lng: -100.0,
+    lat: 17.5, lng: -100.0, radioKm: 300,
+    bbox: { minLat: 14.0, maxLat: 20.0, minLng: -104.0, maxLng: -96.0 },
     faults: ['Cocos Plate Subduction', 'Guerrero Seismic Gap'], activeFaults: ['Cocos Plate Subduction'],
-    baseRisk: 0.66, bValue: 0.87,
+    baseRisk: 0.50, bValue: 0.87,
     history: 'Laguna sísmica sin ruptura mayor desde 1911. M7.1 CDMX 2017 — 369 muertos. Segmento Guerrero acumula tensión crítica desde hace décadas.',
     historyTitle: 'LAGUNA DE GUERRERO — DEUDA SÍSMICA',
-    deuda: true, region: 'Pacífico Mexicano'
+    deuda: true, region: 'Pacífico Mexicano', yearsSinceLastMajor: 115
   },
   {
     id: 'sumatra-java', name: 'Sumatra-Java', country: 'Indonesia',
-    lat: -6.5, lng: 107.0,
+    lat: -6.5, lng: 107.0, radioKm: 500,
+    bbox: { minLat: -11.0, maxLat: 6.0, minLng: 95.0, maxLng: 115.0 },
     faults: ['Sunda Megathrust', 'Java Trench'], activeFaults: ['Sunda Megathrust'],
-    baseRisk: 0.69, bValue: 0.88,
+    baseRisk: 0.52, bValue: 0.88,
     history: 'M9.1-9.3 Sumatra 2004 — 230.000 muertos. Subducción Indo-Australiana continua. Segmento Java con deuda sísmica post-2004. Alta actividad de base.',
     historyTitle: 'POST-SUMATRA: SEGMENTOS ACTIVOS',
     deuda: false, region: 'Asia-Pacífico'
   },
   {
     id: 'central-asia', name: 'Pamir-Hindu Kush', country: 'Afganistán/Tayikistán',
-    lat: 37.0, lng: 71.0,
+    lat: 37.0, lng: 71.0, radioKm: 250,
+    bbox: { minLat: 34.0, maxLat: 40.0, minLng: 66.0, maxLng: 76.0 },
     faults: ['Darvaz Fault', 'Hindo Kush Seismic Nest'], activeFaults: ['Hindo Kush Seismic Nest'],
-    baseRisk: 0.55, bValue: 0.74,
+    baseRisk: 0.42, bValue: 0.74,
     history: 'Segundo nido sísmico del mundo (después de Bucaramanga). Alta frecuencia de sismos profundos M6+. Triple colisión de placas.',
     historyTitle: 'NIDO SÍSMICO HINDÚ KUSH',
     deuda: false, region: 'Asia Central'
@@ -1182,8 +1200,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Forzar recalculo de tamaño del mapa tras render inicial
   setTimeout(() => { if (mapInstance) mapInstance.invalidateSize(); }, 200);
 
-  setTimeout(() => loadUSGSBackground(), 1000);
-  setInterval(() => loadUSGSBackground(), 300000);
+  // Cargar datos en vivo
+  setTimeout(() => loadAllSources(), 1000);
+  setInterval(() => loadAllSources(), 300000);
+
+  // Cargar historial 2 años por zona (en paralelo, sin bloquear)
+  // Esperar 3s para no competir con la carga inicial
+  setTimeout(() => loadHistoricalByZone(), 3000);
 });
 
 function updateClock() {
@@ -1201,15 +1224,39 @@ function initMap() {
     attributionControl: false
   });
 
-  // Usar CartoDB Dark Matter — más confiable y visualmente mejor para datos sísmicos
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  // Intentar CartoDB Positron (claro), con fallback a OSM si falla
+  const cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     maxZoom: 18,
-    opacity: 0.85,
     subdomains: 'abcd',
+    opacity: 0.65,
     attribution: '© CartoDB'
-  }).addTo(mapInstance);
+  });
 
-  // Draw major fault lines (simplified)
+  const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    opacity: 0.65,
+    attribution: '© OpenStreetMap'
+  });
+
+  // Intentar CartoDB, si falla usar OSM
+  cartoLayer.on('tileerror', () => {
+    if (mapInstance.hasLayer(cartoLayer)) {
+      mapInstance.removeLayer(cartoLayer);
+      osmLayer.addTo(mapInstance);
+    }
+  });
+
+  cartoLayer.addTo(mapInstance);
+
+  // Fallback proactivo: si en 4 segundos no cargó ningún tile, cambiar a OSM
+  setTimeout(() => {
+    const tiles = document.querySelectorAll('.leaflet-tile-loaded');
+    if (tiles.length === 0) {
+      mapInstance.removeLayer(cartoLayer);
+      osmLayer.addTo(mapInstance);
+    }
+  }, 4000);
+
   drawFaultLines();
 }
 
@@ -1249,7 +1296,23 @@ function drawFaultLines() {
   });
 }
 
-// ── USGS Data ──
+// ══════════════════════════════════════════════════════════
+//  MOTOR MULTIFUENTE — Cascada por velocidad
+//  Prioridad: USGS → EMSC → INGV → SGC
+//  Timeout 8s por fuente — nunca bloquea
+// ══════════════════════════════════════════════════════════
+
+// Estado de fuentes
+const SOURCE_STATUS = {
+  usgs:  { name: 'USGS',  active: false, lastOk: null, events: 0 },
+  emsc:  { name: 'EMSC',  active: false, lastOk: null, events: 0 },
+  ingv:  { name: 'INGV',  active: false, lastOk: null, events: 0 },
+  sgc:   { name: 'SGC',   active: false, lastOk: null, events: 0 },
+};
+
+// Pool global de eventos deduplicados por id/coords+tiempo
+let eventPool = new Map();
+
 async function fetchWithTimeout(url, ms = 8000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
@@ -1263,119 +1326,396 @@ async function fetchWithTimeout(url, ms = 8000) {
   }
 }
 
-// Carga silenciosa en segundo plano — no bloquea la UI
-async function loadUSGSBackground() {
-  const FEEDS = [
+// ── Normalizar evento a formato común ──
+function normalizeEvent(raw, source) {
+  try {
+    if (source === 'usgs' || source === 'emsc') {
+      const p = raw.properties;
+      const c = raw.geometry?.coordinates;
+      if (!c || c.length < 2) return null;
+      const mag = parseFloat(p.mag || p.magnitude || 0);
+      if (mag < 2.0) return null;
+      return {
+        id: raw.id || `${source}-${c[0].toFixed(2)}-${c[1].toFixed(2)}-${p.time}`,
+        source,
+        mag,
+        lat: parseFloat(c[1]),
+        lng: parseFloat(c[0]),
+        depth: parseFloat(c[2] || 10),
+        time: p.time || p.lastupdate || Date.now(),
+        place: p.place || p.flynn_region || p.title || 'Desconocido',
+        url: p.url || p.link || ''
+      };
+    }
+    if (source === 'ingv') {
+      // INGV retorna GeoJSON estándar compatible
+      const p = raw.properties;
+      const c = raw.geometry?.coordinates;
+      if (!c) return null;
+      const mag = parseFloat(p.mag || p.magType || 0);
+      if (mag < 2.0) return null;
+      return {
+        id: `ingv-${raw.id || c[0]}-${c[1]}-${p.time}`,
+        source: 'ingv',
+        mag,
+        lat: parseFloat(c[1]),
+        lng: parseFloat(c[0]),
+        depth: parseFloat(c[2] || 10),
+        time: new Date(p.time).getTime(),
+        place: p.place || p.flynn_region || 'Italia/Mediterráneo',
+        url: ''
+      };
+    }
+  } catch(e) { return null; }
+  return null;
+}
+
+// ── Clave de deduplicación ──
+function dedupKey(ev) {
+  // Dos eventos son el mismo si están a <50km y <60s de diferencia
+  return `${(ev.lat/0.5).toFixed(0)}_${(ev.lng/0.5).toFixed(0)}_${Math.floor(ev.time/60000)}`;
+}
+
+function mergeIntoPool(events, source) {
+  let added = 0;
+  events.forEach(raw => {
+    const ev = normalizeEvent(raw, source);
+    if (!ev) return;
+    const key = dedupKey(ev);
+    if (!eventPool.has(key)) {
+      eventPool.set(key, ev);
+      added++;
+    }
+  });
+  SOURCE_STATUS[source].events = added;
+  SOURCE_STATUS[source].lastOk = Date.now();
+  SOURCE_STATUS[source].active = true;
+  console.log(`[SeismoSense] ${source.toUpperCase()} +${added} eventos (pool: ${eventPool.size})`);
+}
+
+// ── USGS (más rápido, cobertura global) ──
+async function fetchUSGS() {
+  const feeds = [
     'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson',
     'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson',
-    'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson',
   ];
+  for (const url of feeds) {
+    try {
+      const res = await fetchWithTimeout(url, 8000);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.features?.length > 0) {
+        mergeIntoPool(data.features, 'usgs');
+        return true;
+      }
+    } catch(e) {
+      console.warn('[USGS] falló:', e.message);
+    }
+  }
+  SOURCE_STATUS.usgs.active = false;
+  return false;
+}
 
-  for (const url of FEEDS) {
+// ── EMSC (Europa, Mediterráneo, complementa USGS) ──
+async function fetchEMSC() {
+  // EMSC FDSN event service — retorna GeoJSON
+  const url = 'https://www.seismicportal.eu/fdsnws/event/1/query?format=json&limit=200&minmag=2.5&orderby=time';
+  try {
+    const res = await fetchWithTimeout(url, 8000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    // EMSC retorna features en data.features
+    const features = data.features || [];
+    if (features.length > 0) {
+      mergeIntoPool(features, 'emsc');
+      return true;
+    }
+  } catch(e) {
+    console.warn('[EMSC] falló:', e.message);
+    SOURCE_STATUS.emsc.active = false;
+  }
+  return false;
+}
+
+// ── INGV Italia ──
+async function fetchINGV() {
+  const url = 'https://webservices.ingv.it/fdsnws/event/1/query?format=geojson&limit=100&minmag=2.0&orderby=time';
+  try {
+    const res = await fetchWithTimeout(url, 8000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const features = data.features || [];
+    if (features.length > 0) {
+      mergeIntoPool(features, 'ingv');
+      return true;
+    }
+  } catch(e) {
+    console.warn('[INGV] falló:', e.message);
+    SOURCE_STATUS.ingv.active = false;
+  }
+  return false;
+}
+
+// ── SGC Colombia — sin API pública directa, usamos proxy USGS filtrado ──
+async function fetchSGC() {
+  // SGC no tiene CORS abierto, usamos USGS filtrado por bounding box Colombia
+  const url = 'https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minmag=1.5&minlatitude=-5&maxlatitude=13&minlongitude=-80&maxlongitude=-65&orderby=time&limit=200';
+  try {
+    const res = await fetchWithTimeout(url, 8000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const features = data.features || [];
+    if (features.length > 0) {
+      // Tag como SGC para distinguir
+      features.forEach(f => { if (f.properties) f.properties._sgc = true; });
+      mergeIntoPool(features, 'sgc');
+      return true;
+    }
+  } catch(e) {
+    console.warn('[SGC/Colombia] falló:', e.message);
+    SOURCE_STATUS.sgc.active = false;
+  }
+  return false;
+}
+
+// ── Orquestador principal — lanza todas en paralelo, no espera las lentas ──
+async function loadAllSources() {
+  // Lanzar todas simultáneamente — cada una tiene su propio timeout
+  const results = await Promise.allSettled([
+    fetchUSGS(),
+    fetchEMSC(),
+    fetchINGV(),
+    fetchSGC()
+  ]);
+
+  const anyOk = results.some(r => r.value === true);
+
+  if (anyOk || eventPool.size > 0) {
+    // Convertir pool a array para compatibilidad con el resto del código
+    earthquakeData = Array.from(eventPool.values()).map(ev => ({
+      id: ev.id,
+      properties: {
+        mag: ev.mag,
+        place: ev.place,
+        time: ev.time,
+        url: ev.url,
+        _source: ev.source
+      },
+      geometry: { coordinates: [ev.lng, ev.lat, ev.depth] }
+    }));
+
+    computeRiskModels();
+    renderRiskList();
+    renderEventsList();
+    renderMap();
+    updateGlobalStats();
+    updateTechPanel();
+    updateSourceIndicator();
+
+    console.log(`[SeismoSense] Pool total: ${earthquakeData.length} eventos de ${
+      Object.values(SOURCE_STATUS).filter(s => s.active).map(s => s.name).join('+')
+    }`);
+  }
+}
+
+function updateSourceIndicator() {
+  const active = Object.values(SOURCE_STATUS).filter(s => s.active).map(s => s.name);
+  const badge = document.querySelector('.live-badge');
+  if (badge) {
+    badge.title = `Fuentes activas: ${active.join(', ')}`;
+  }
+  // Actualizar panel técnico si existe
+  const srcEl = document.getElementById('activeSources');
+  if (srcEl) srcEl.textContent = active.join(' · ') || 'Ninguna';
+}
+
+// ── Historial por zona (2 años, USGS FDSNWS) ──
+// Se carga una vez al inicio, en paralelo, sin bloquear
+let historicalByZone = {}; // id -> array de eventos
+
+async function loadHistoricalByZone() {
+  const endDate = new Date().toISOString().split('T')[0];
+  const startDate = new Date(Date.now() - 2 * 365 * 24 * 3600 * 1000).toISOString().split('T')[0];
+
+  const promises = RISK_ZONES.map(async zone => {
+    const b = zone.bbox;
+    const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson`
+      + `&starttime=${startDate}&endtime=${endDate}`
+      + `&minlatitude=${b.minLat}&maxlatitude=${b.maxLat}`
+      + `&minlongitude=${b.minLng}&maxlongitude=${b.maxLng}`
+      + `&minmagnitude=2.0&orderby=time&limit=500`;
     try {
       const res = await fetchWithTimeout(url, 10000);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (!data.features || data.features.length === 0) throw new Error('Empty');
-
-      earthquakeData = data.features;
-
-      // Actualizar UI silenciosamente
-      computeRiskModels();
-      renderRiskList();
-      renderEventsList();
-      renderMap();
-      updateGlobalStats();
-      updateTechPanel();
-
-      // Mostrar indicador de datos en vivo
-      const badge = document.querySelector('.live-badge');
-      if (badge) badge.style.color = 'var(--risk-low-c)';
-
-      console.log(`[SeismoSense] USGS actualizado: ${earthquakeData.length} eventos`);
-      return; // éxito, salir del loop
+      historicalByZone[zone.id] = data.features || [];
+      console.log(`[HIST] ${zone.name}: ${historicalByZone[zone.id].length} eventos (2 años)`);
     } catch(e) {
-      console.warn('[SeismoSense] Feed falló, intentando siguiente:', e.message);
+      historicalByZone[zone.id] = [];
+      console.warn(`[HIST] ${zone.name} falló:`, e.message);
     }
+  });
+
+  // Lanzar todas en paralelo — cada una con su propio timeout
+  await Promise.allSettled(promises);
+
+  // Recalcular modelos con historial real
+  if (earthquakeData.length > 0) {
+    computeRiskModels();
+    renderRiskList();
+    renderMap();
+    updateTechPanel();
+    console.log('[SeismoSense] Modelos recalibrados con historial 2 años');
   }
-  console.warn('[SeismoSense] Todos los feeds USGS fallaron — manteniendo datos actuales');
 }
 
-// Mantener compatibilidad
-async function loadUSGSData() { return loadUSGSBackground(); }
-
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
 function setLoadingText(t) {
   const el = document.getElementById('loadingText');
   if (el) el.textContent = t;
 }
+async function loadUSGSData() { return loadAllSources(); }
 
-// ── Statistical Models ──
+// ══════════════════════════════════════════════════════════
+//  MOTOR ESTADÍSTICO MULTIVARIABLE — Recalibrado
+// ══════════════════════════════════════════════════════════
+
 function computeRiskModels() {
   const now = Date.now();
-  const week = 7 * 24 * 3600 * 1000;
+  const DAY = 86400000;
+  const WEEK = 7 * DAY;
+
+  // Parámetros ETAS calibrados (Ogata 1988, valores estándar sismología)
+  const ETAS_K  = 0.008;   // Productividad base
+  const ETAS_p  = 1.12;    // Decaimiento temporal (Omori-Utsu)
+  const ETAS_c  = 0.05;    // Tiempo mínimo (días)
+  const ETAS_alpha = 0.46; // Sensibilidad a magnitud
 
   riskZonesComputed = RISK_ZONES.map(zone => {
-    // Find nearby earthquakes (within ~300km radius)
-    const nearby = earthquakeData.filter(eq => {
+    const radio = zone.radioKm || 300;
+
+    // ── 1. Eventos cercanos usando radio propio de cada zona ──
+    const nearby30d = earthquakeData.filter(eq => {
       const [lng, lat] = eq.geometry.coordinates;
-      const d = haversine(lat, lng, zone.lat, zone.lng);
-      return d < 300;
+      return haversine(lat, lng, zone.lat, zone.lng) < radio &&
+             (now - eq.properties.time) < 30 * DAY;
     });
 
-    const recent = nearby.filter(eq =>
-      (now - eq.properties.time) < week
-    );
+    const nearby7d = nearby30d.filter(eq => (now - eq.properties.time) < WEEK);
+    const nearby24h = nearby30d.filter(eq => (now - eq.properties.time) < DAY);
 
-    // ── ETAS Model ──
-    // P(next M≥5 | recent activity) using Omori-Utsu decay
-    let etasProb = zone.baseRisk;
-    const p = 1.08, K = 0.012, c = 0.01;
-    const tDays = (now - (recent[0]?.properties.time || now - 86400000)) / 86400000;
+    // Historial 2 años para b-value confiable
+    const historical = historicalByZone[zone.id] || [];
 
-    if (recent.length > 0) {
-      const biggest = Math.max(...recent.map(e => e.properties.mag || 0));
-      // ETAS contribution: each event adds K * 10^(α*M) / (t+c)^p
-      let etasSum = 0;
-      recent.forEach(eq => {
-        const mag = eq.properties.mag || 2.5;
-        const t = Math.max(0.01, (now - eq.properties.time) / 86400000);
-        etasSum += K * Math.pow(10, 0.5 * mag) / Math.pow(t + c, p);
-      });
-      const etasBoost = Math.min(0.35, etasSum / 10);
+    // ── 2. ETAS — Omori-Utsu con decaimiento real ──
+    // Contribución de cada evento: K * 10^(α*M) / (t+c)^p
+    // Normalizado para que no explote con muchos eventos
+    let etasRate = 0;
+    nearby30d.forEach(eq => {
+      const mag = eq.properties.mag || 2.5;
+      const tDays = Math.max(ETAS_c, (now - eq.properties.time) / DAY);
+      etasRate += ETAS_K * Math.pow(10, ETAS_alpha * (mag - 4.0)) / Math.pow(tDays + ETAS_c, ETAS_p);
+    });
 
-      // Boost for recent M5+
-      const bigBoost = biggestInLast(recent, 5, 3) * 0.12;
-      const medBoost = biggestInLast(recent, 4, 7) * 0.05;
+    // Convertir tasa ETAS a probabilidad via Poisson: P = 1 - e^(-rate)
+    const etasProb = 1 - Math.exp(-Math.min(etasRate, 5));
 
-      etasProb = Math.min(0.95, zone.baseRisk + etasBoost + bigBoost + medBoost);
-    }
+    // ── 3. Gutenberg-Richter — b-value con historial real 2 años ──
+    // Si tenemos historial, úsalo; si no, fallback a 30 días
+    const bSource = historical.length >= 30 ? historical : nearby30d;
+    const bValue = computeBValue(bSource, zone.bValue);
+    // b bajo = zona acumula estrés (menos sismos pequeños = falla bloqueada)
+    // Referencia: b normal ~1.0, b bajo (<0.7) = alta tensión
+    const bNormal = 1.0;
+    const bDeviation = Math.max(0, bNormal - bValue); // positivo = más peligroso
+    const grContrib = Math.min(0.25, bDeviation * 0.5);
 
-    // ── Gutenberg-Richter ──
-    // Calculate b-value from actual data
-    const bValue = computeBValue(nearby, zone.bValue);
-    // Low b-value = high stress = higher probability
-    const bAdjust = bValue < 0.8 ? 0.06 : bValue < 0.9 ? 0.03 : 0;
-    etasProb = Math.min(0.95, etasProb + bAdjust);
+    // ── 4. Deuda sísmica — energía acumulada vs tasa histórica ──
+    // Años desde último evento mayor × tasa histórica = energía pendiente
+    const seismicDebt = zone.deuda
+      ? Math.min(0.20, (zone.yearsSinceLastMajor || 25) / 200)
+      : 0;
 
-    // ── Deuda sísmica adjustment ──
-    if (zone.deuda) etasProb = Math.min(0.95, etasProb + 0.05);
+    // ── 5. Transferencia de Coulomb — boost post-evento M6+ cercano ──
+    const bigRecent = earthquakeData.filter(eq => {
+      const [lng, lat] = eq.geometry.coordinates;
+      const mag = eq.properties.mag || 0;
+      const dist = haversine(lat, lng, zone.lat, zone.lng);
+      const tDays = (now - eq.properties.time) / DAY;
+      return mag >= 6.0 && dist < 800 && tDays < 30;
+    });
 
-    // ── Alert flag ──
-    const isAlert = zone.alert || etasProb >= 0.60;
+    let coulombContrib = 0;
+    bigRecent.forEach(eq => {
+      const mag = eq.properties.mag;
+      const dist = haversine(
+        eq.geometry.coordinates[1], eq.geometry.coordinates[0],
+        zone.lat, zone.lng
+      );
+      const tDays = Math.max(0.1, (now - eq.properties.time) / DAY);
+      // ΔCFS disminuye con distancia y tiempo
+      coulombContrib += (mag - 5.5) * 0.04 * (1 / (dist / 200 + 1)) * (1 / (tDays / 7 + 1));
+    });
+    coulombContrib = Math.min(0.25, coulombContrib);
+
+    // ── 6. Anomalía de clustering 24h ──
+    // Si hay muchos sismos en las últimas 24h vs promedio semanal
+    const rate24h = nearby24h.length;
+    const rateAvg = nearby7d.length / 7;
+    const clusterAnomaly = rateAvg > 0
+      ? Math.min(0.15, Math.max(0, (rate24h / rateAvg - 1.5) * 0.05))
+      : 0;
+
+    // ── 7. Combinar todos los componentes ──
+    // Base geológica + ETAS + G-R + Deuda + Coulomb + Clustering
+    const rawProb = zone.baseRisk * 0.35   // peso base geológico
+      + etasProb   * 0.30                  // peso actividad reciente
+      + grContrib  * 1.00                  // b-value
+      + seismicDebt * 1.00                 // deuda sísmica
+      + coulombContrib * 1.00              // transferencia estrés
+      + clusterAnomaly * 1.00;             // anomalía 24h
+
+    // Limitar a rango útil [0.05, 0.92]
+    const probability = Math.max(0.05, Math.min(0.92, rawProb));
+
+    // ── 8. Tendencia — comparar con ciclo anterior ──
+    const prevProb = zone._prevProbability || probability;
+    const trend = probability > prevProb + 0.03 ? 'up'
+      : probability < prevProb - 0.03 ? 'down' : 'stable';
 
     return {
       ...zone,
-      probability: etasProb,
-      riskLevel: getRiskLevel(etasProb),
-      nearbyCount: nearby.length,
-      recentCount: recent.length,
+      probability,
+      riskLevel: getRiskLevel(probability),
+      nearbyCount: nearby30d.length,
+      recentCount: nearby7d.length,
+      count24h: nearby24h.length,
       computedBValue: bValue,
-      maxNearby: recent.length > 0 ? Math.max(...recent.map(e => e.properties.mag || 0)) : 0,
-      isAlert
+      etasProb: etasProb,
+      grContrib,
+      seismicDebt,
+      coulombContrib,
+      clusterAnomaly,
+      maxNearby: nearby7d.length > 0
+        ? Math.max(...nearby7d.map(e => e.properties.mag || 0)) : 0,
+      isAlert: zone.alert || probability >= 0.55,
+      trend,
+      _prevProbability: probability
     };
   });
+
+  // Normalización suave — evitar que todo se apile en extremo
+  // Si más de 60% de zonas están en crítico/extremo, recalibrar
+  const highCount = riskZonesComputed.filter(z => z.probability > 0.65).length;
+  if (highCount > riskZonesComputed.length * 0.5) {
+    const factor = 0.85;
+    riskZonesComputed.forEach(z => {
+      if (z.probability > 0.65) {
+        z.probability = Math.max(0.50, z.probability * factor);
+        z.riskLevel = getRiskLevel(z.probability);
+      }
+    });
+  }
 
   riskZonesComputed.sort((a, b) => b.probability - a.probability);
 }
@@ -1471,6 +1811,7 @@ function renderRiskList() {
         <span class="risk-meta-tag">${zone.recentCount} sismos/7d</span>
         <span class="risk-meta-tag">b=${zone.computedBValue.toFixed(2)}</span>
         ${zone.deuda ? '<span class="risk-meta-tag" style="color:var(--risk-crit-c)">⚠ DEUDA</span>' : ''}
+        <span class="risk-meta-tag" style="color:${zone.trend==='up'?'#e74c3c':zone.trend==='down'?'#2ecc71':'#6b84a8'}">${zone.trend==='up'?'↑ Subiendo':zone.trend==='down'?'↓ Bajando':'→ Estable'}</span>
       </div>
     `;
     div.onclick = () => showZoneDetail(zone);
@@ -1658,59 +1999,93 @@ function renderRiskMap() {
   riskZonesComputed.forEach(zone => {
     const color = getRiskColor(zone.riskLevel);
     const pct = zone.probability;
-    const radius = 20 + pct * 40;
 
-    // Outer glow ring
-    const ring = L.circleMarker([zone.lat, zone.lng], {
-      radius: radius + 8,
-      fillColor: color,
-      fillOpacity: 0.08,
-      color: color,
-      weight: 1,
-      opacity: 0.3
-    }).addTo(mapInstance);
+    // Polígono elíptico que representa el área de influencia geológica real
+    // Cada zona tiene su propio tamaño y orientación según la falla
+    const polygon = buildZonePolygon(zone);
 
-    // Main circle
-    const circle = L.circleMarker([zone.lat, zone.lng], {
-      radius: radius,
+    const layer = L.polygon(polygon, {
       fillColor: color,
-      fillOpacity: 0.25,
+      fillOpacity: 0.55,
       color: color,
       weight: 2,
-      opacity: 0.7
+      opacity: 0.85
     }).addTo(mapInstance);
 
-    // Label
+    // Label compacto sobre la zona
+    const center = getPolygonCenter(polygon);
     const label = L.divIcon({
       html: `<div style="
-        background:rgba(6,10,20,0.88);
-        border:1px solid ${color};
+        background:rgba(255,255,255,0.92);
+        border:2px solid ${color};
         border-radius:5px;
-        padding:3px 7px;
+        padding:2px 7px;
         font-family:'Space Grotesk',sans-serif;
         font-size:11px;
         font-weight:700;
         color:${color};
         white-space:nowrap;
-        box-shadow: 0 0 8px ${color}44;
+        box-shadow:0 1px 6px rgba(0,0,0,0.18);
+        pointer-events:none;
       ">${(pct*100).toFixed(0)}%</div>`,
-      iconAnchor: [20, 10],
+      iconAnchor: [18, 10],
       className: ''
     });
 
-    const labelMarker = L.marker([zone.lat + 0.5, zone.lng], { icon: label, interactive: false })
+    const labelMarker = L.marker(center, { icon: label, interactive: false })
       .addTo(mapInstance);
 
-    circle.on('click', () => showZoneDetail(zone));
-    circle.on('mouseover', () => {
-      circle.bindTooltip(
-        `<strong>${zone.name}</strong><br>${zone.country}<br>Prob: ${(zone.probability*100).toFixed(0)}%`,
-        { className: 'tooltip-custom', direction: 'top' }
+    layer.on('click', () => showZoneDetail(zone));
+    layer.on('mouseover', () => {
+      layer.bindTooltip(
+        `<strong>${zone.name}</strong><br>${zone.country}<br>Prob: ${(zone.probability*100).toFixed(0)}% · ${getRiskLabel(zone.riskLevel)}`,
+        { className: 'tooltip-custom', direction: 'top', sticky: true }
       ).openTooltip();
     });
 
-    riskMarkers.push(ring, circle, labelMarker);
+    riskMarkers.push(layer, labelMarker);
   });
+}
+
+// Genera un polígono elíptico para cada zona según su tamaño geológico real
+function buildZonePolygon(zone) {
+  const extents = {
+    'eje-cafetero':         { latR: 1.2, lngR: 1.5, angle: 30 },
+    'bucaramanga':          { latR: 1.0, lngR: 1.2, angle: 0  },
+    'yaracuy-venezuela':    { latR: 1.8, lngR: 3.5, angle: 15 },
+    'ring-fire-chile':      { latR: 4.0, lngR: 1.2, angle: 5  },
+    'cascadia':             { latR: 3.5, lngR: 1.5, angle: 20 },
+    'nepal-himalaya':       { latR: 1.5, lngR: 6.0, angle: 10 },
+    'turkey-east':          { latR: 1.2, lngR: 4.0, angle: 25 },
+    'japan-nankai':         { latR: 2.0, lngR: 2.5, angle: 45 },
+    'iran-zagros':          { latR: 2.0, lngR: 4.0, angle: 30 },
+    'california-san-andreas':{ latR: 3.5, lngR: 1.0, angle: 35 },
+    'mexico-guerrero':      { latR: 1.2, lngR: 3.0, angle: 20 },
+    'sumatra-java':         { latR: 2.0, lngR: 6.0, angle: 40 },
+    'central-asia':         { latR: 1.5, lngR: 2.5, angle: 10 },
+  };
+
+  const e = extents[zone.id] || { latR: 1.5, lngR: 2.0, angle: 0 };
+  const points = [];
+  const steps = 24;
+  const angleRad = (e.angle * Math.PI) / 180;
+
+  for (let i = 0; i < steps; i++) {
+    const t = (2 * Math.PI * i) / steps;
+    // Elipse rotada
+    const x = e.lngR * Math.cos(t);
+    const y = e.latR * Math.sin(t);
+    const rotX = x * Math.cos(angleRad) - y * Math.sin(angleRad);
+    const rotY = x * Math.sin(angleRad) + y * Math.cos(angleRad);
+    points.push([zone.lat + rotY, zone.lng + rotX]);
+  }
+  return points;
+}
+
+function getPolygonCenter(polygon) {
+  const lat = polygon.reduce((s, p) => s + p[0], 0) / polygon.length;
+  const lng = polygon.reduce((s, p) => s + p[1], 0) / polygon.length;
+  return [lat, lng];
 }
 
 function renderEqMap() {
