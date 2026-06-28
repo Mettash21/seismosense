@@ -1,74 +1,62 @@
-// SeismoSense Service Worker v1.0
-// Maneja: cache offline, notificaciones push, background sync
+// SeismoSense Service Worker v2.0
+// Push notifications reales via Firebase FCM + Web Push API
 
-const CACHE_NAME = 'seismosense-v1';
+const CACHE_NAME = 'seismosense-v2';
+const VAPID_PUBLIC_KEY = 'BHN9FBVJRBenZ1QUu25vScCSl7jLVZGLz0V8aGszC_KqyF5QbhtQIDyWY6DgJrEqCSdJNB87LaOU6ndq5dfTW70';
+
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap',
-  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'
 ];
 
-// Umbrales para notificaciones automáticas
-const ALERT_THRESHOLDS = {
-  magnitude: 5.5,      // Notificar sismos M >= 5.5
-  probability: 0.60,   // Notificar zonas con prob >= 60%
-  checkInterval: 300   // Segundos entre chequeos (5 min)
-};
-
-// ── Install: cachear assets estáticos ──
+// ── Install ──
 self.addEventListener('install', event => {
-  console.log('[SW] Instalando SeismoSense...');
+  console.log('[SW] Instalando v2.0...');
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(STATIC_ASSETS.filter(url => !url.startsWith('http')));
-    }).then(() => {
-      console.log('[SW] Cache inicial listo');
-      return self.skipWaiting();
-    })
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(STATIC_ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
-// ── Activate: limpiar caches viejos ──
+// ── Activate ──
 self.addEventListener('activate', event => {
-  console.log('[SW] Activando...');
   event.waitUntil(
-    caches.keys().then(keys => {
-      return Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-      );
-    }).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
-// ── Fetch: estrategia Network-First con fallback a cache ──
+// ── Fetch: Network-first con fallback ──
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // USGS API: siempre red (datos en tiempo real)
-  if (url.hostname.includes('earthquake.usgs.gov')) {
+  // APIs sísmicas: siempre red
+  if (url.hostname.includes('earthquake.usgs.gov') ||
+      url.hostname.includes('seismicportal.eu') ||
+      url.hostname.includes('ingv.it')) {
     event.respondWith(
-      fetch(event.request).catch(() => {
-        return new Response(JSON.stringify({ features: [], error: 'offline' }), {
+      fetch(event.request).catch(() =>
+        new Response(JSON.stringify({ features: [], error: 'offline' }), {
           headers: { 'Content-Type': 'application/json' }
-        });
-      })
+        })
+      )
     );
     return;
   }
 
-  // Tiles de mapa: cache primero
-  if (url.hostname.includes('tile.openstreetmap.org')) {
+  // Tiles de mapa: cache-first
+  if (url.hostname.includes('carto') || url.hostname.includes('openstreetmap')) {
     event.respondWith(
-      caches.match(event.request).then(cached => {
-        return cached || fetch(event.request).then(response => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-          return response;
-        });
-      })
+      caches.match(event.request).then(cached =>
+        cached || fetch(event.request).then(res => {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
+          return res;
+        })
+      )
     );
     return;
   }
@@ -76,141 +64,101 @@ self.addEventListener('fetch', event => {
   // Resto: network-first
   event.respondWith(
     fetch(event.request)
-      .then(response => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+      .then(res => {
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
         }
-        return response;
+        return res;
       })
       .catch(() => caches.match(event.request))
   );
 });
 
-// ── Push Notifications (Firebase) ──
+// ══════════════════════════════════════════════════════
+//  PUSH NOTIFICATIONS — Firebase FCM + Web Push
+// ══════════════════════════════════════════════════════
+
 self.addEventListener('push', event => {
   if (!event.data) return;
 
   let payload;
-  try {
-    payload = event.data.json();
-  } catch {
-    payload = {
-      title: '⚠ SeismoSense',
-      body: event.data.text(),
-      risk: 'moderate'
-    };
-  }
+  try { payload = event.data.json(); }
+  catch { payload = { title: '⚠ SeismoSense', body: event.data.text(), type: 'earthquake' }; }
 
-  const riskColors = {
-    low: '#2ecc71',
-    moderate: '#f39c12',
-    high: '#e67e22',
-    critical: '#e74c3c',
-    extreme: '#9b59b6'
-  };
+  const isLarge = (payload.magnitude || 0) >= 6.5;
+  const isCritical = (payload.magnitude || 0) >= 7.0 || payload.type === 'critical';
 
   const options = {
-    body: payload.body,
-    icon: '/icons/icon-192.png',
-    badge: '/icons/badge-96.png',
-    tag: payload.tag || 'seismosense-alert',
+    body: payload.body || payload.place || 'Actividad sísmica detectada',
+    icon: '/icons/icon-192.svg',
+    badge: '/icons/badge-96.svg',
+    tag: payload.tag || `eq-${Date.now()}`,
     renotify: true,
-    requireInteraction: payload.risk === 'critical' || payload.risk === 'extreme',
-    vibrate: payload.risk === 'critical' ? [200, 100, 200, 100, 400] : [200, 100, 200],
+    requireInteraction: isCritical,
+    silent: false,
+    vibrate: isCritical
+      ? [300, 100, 300, 100, 600, 100, 600]
+      : isLarge
+        ? [200, 100, 200, 100, 400]
+        : [200, 100, 200],
     data: {
-      url: payload.url || '/',
+      url: payload.url || '/?tab=events',
+      magnitude: payload.magnitude,
+      place: payload.place,
       zone: payload.zone,
       probability: payload.probability,
-      magnitude: payload.magnitude,
       timestamp: Date.now()
     },
     actions: [
-      { action: 'view', title: '🗺 Ver mapa' },
+      { action: 'view', title: '🗺 Ver en mapa' },
       { action: 'dismiss', title: 'Cerrar' }
     ]
   };
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || '⚠ Alerta Sísmica', options)
+    self.registration.showNotification(payload.title || '⚠ Alerta Sísmica — SeismoSense', options)
   );
 });
 
-// ── Notification click ──
+// ── Click en notificación ──
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-
   if (event.action === 'dismiss') return;
 
-  const url = event.notification.data?.url || '/';
+  const targetUrl = event.notification.data?.url || '/';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      // Si ya hay una ventana abierta, enfocarla
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.postMessage({ type: 'NAVIGATE', url, data: event.notification.data });
+          client.postMessage({ type: 'NAVIGATE', url: targetUrl, data: event.notification.data });
           return client.focus();
         }
       }
-      // Si no, abrir nueva ventana
-      if (clients.openWindow) return clients.openWindow(url);
+      if (clients.openWindow) return clients.openWindow(targetUrl);
     })
   );
 });
 
-// ── Background Sync: chequeo periódico de alertas ──
-self.addEventListener('periodicsync', event => {
-  if (event.tag === 'seismosense-check') {
-    event.waitUntil(checkForAlerts());
-  }
-});
-
-async function checkForAlerts() {
-  try {
-    const res = await fetch(
-      'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_hour.geojson'
-    );
-    const data = await res.json();
-    const significant = data.features.filter(eq =>
-      (eq.properties.mag || 0) >= ALERT_THRESHOLDS.magnitude
-    );
-
-    for (const eq of significant) {
-      const mag = eq.properties.mag;
-      const place = eq.properties.place || 'Ubicación desconocida';
-      const isLarge = mag >= 6.5;
-
-      await self.registration.showNotification(
-        isLarge ? `🚨 SISMO M${mag.toFixed(1)} DETECTADO` : `⚠ Sismo M${mag.toFixed(1)}`,
-        {
-          body: place,
-          icon: '/icons/icon-192.png',
-          badge: '/icons/badge-96.png',
-          tag: `eq-${eq.id}`,
-          vibrate: isLarge ? [300, 100, 300, 100, 600] : [200, 100, 200],
-          requireInteraction: isLarge,
-          data: { url: '/?tab=events', magnitude: mag }
-        }
-      );
-    }
-  } catch(e) {
-    console.log('[SW] Background check failed:', e.message);
-  }
-}
-
-// ── Mensaje desde la app principal ──
+// ── Mensajes desde la app ──
 self.addEventListener('message', event => {
-  if (event.data?.type === 'SKIP_WAITING') {
-    self.skipWaiting();
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+
+  if (event.data?.type === 'SUBSCRIBE_PUSH') {
+    // La app pide suscripción — devolver el endpoint
+    self.registration.pushManager.getSubscription().then(sub => {
+      event.ports[0]?.postMessage({ subscription: sub ? sub.toJSON() : null });
+    });
   }
 
-  if (event.data?.type === 'SEND_TEST_NOTIFICATION') {
-    self.registration.showNotification('🧪 SeismoSense — Prueba', {
-      body: 'Las notificaciones están funcionando correctamente.',
-      icon: '/icons/icon-192.png',
-      badge: '/icons/badge-96.png',
-      vibrate: [200, 100, 200]
+  if (event.data?.type === 'TEST_NOTIFICATION') {
+    self.registration.showNotification('🧪 SeismoSense — Prueba exitosa', {
+      body: 'Las alertas push están funcionando. Recibirás notificaciones de sismos M5.5+ en tiempo real.',
+      icon: '/icons/icon-192.svg',
+      badge: '/icons/badge-96.svg',
+      vibrate: [200, 100, 200],
+      data: { url: '/' }
     });
   }
 });
