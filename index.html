@@ -1058,7 +1058,7 @@ const RISK_ZONES = [
   },
   {
     id: 'yaracuy-venezuela', name: 'Sistema Oca-Boconó', country: 'Venezuela',
-    lat: 10.5, lng: -68.8, radioKm: 350,
+    lat: 10.5, lng: -68.8, radioKm: 500,
     bbox: { minLat: 8.0, maxLat: 12.5, minLng: -72.0, maxLng: -62.0 },
     faults: ['Falla de Oca', 'Boconó', 'San Sebastián'], activeFaults: ['Falla de Oca', 'Boconó'],
     baseRisk: 0.65, bValue: 0.65,
@@ -1601,6 +1601,13 @@ function computeRiskModels() {
              (now - eq.properties.time) < 30 * DAY;
     });
 
+    // Diagnóstico temporal Venezuela
+    if (zone.id === 'yaracuy-venezuela') {
+      console.log(`[DIAG Venezuela] Pool total: ${earthquakeData.length}, nearby30d: ${nearby30d.length}, radio: ${radio}km`);
+      const m5 = nearby30d.filter(e => (e.properties.mag||0) >= 5.0);
+      console.log(`[DIAG Venezuela] M5+: ${m5.length}`, m5.map(e => `M${e.properties.mag} ${new Date(e.properties.time).toLocaleDateString()}`));
+    }
+
     const nearby7d = nearby30d.filter(eq => (now - eq.properties.time) < WEEK);
     const nearby24h = nearby30d.filter(eq => (now - eq.properties.time) < DAY);
 
@@ -1676,12 +1683,12 @@ function computeRiskModels() {
 
     let rawProb;
     if (hasSignificantEvent) {
-      // Evento M5+ reciente: ETAS lidera
-      rawProb = etasProb * 0.55
+      // Evento M5+ reciente: ETAS lidera fuertemente
+      rawProb = etasProb * 0.60
         + zone.baseRisk * 0.15
-        + grContrib * 0.10
-        + seismicDebt * 0.10
-        + coulombContrib * 0.08
+        + grContrib * 0.08
+        + seismicDebt * 0.08
+        + coulombContrib * 0.07
         + clusterAnomaly * 0.02;
     } else if (hasRecentActivity) {
       // Actividad menor: balance ETAS + geología
@@ -1702,7 +1709,7 @@ function computeRiskModels() {
     }
 
     // Boost explícito para zonas con alerta activa (evento reciente real)
-    if (zone.alert) rawProb = Math.min(0.92, rawProb + 0.15);
+    if (zone.alert) rawProb = Math.min(0.92, rawProb + 0.28);
 
     // Limitar a rango útil [0.05, 0.92]
     const probability = Math.max(0.05, Math.min(0.92, rawProb));
