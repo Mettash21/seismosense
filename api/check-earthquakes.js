@@ -1,17 +1,10 @@
 // api/check-earthquakes.js
-// Detector de sismos en tiempo real — llamado por GitHub Actions cada 2 minutos
-// Vercel Serverless Function
+// Detector de sismos — llamado por GitHub Actions cada 5 minutos
+// Usa Firebase Admin SDK V1 con Service Account
 
-const VAPID_PUBLIC_KEY  = 'BHN9FBVJRBenZ1QUu25vScCSl7jLVZGLz0V8aGszC_KqyF5QbhtQIDyWY6DgJrEqCSdJNB87LaOU6ndq5dfTW70';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY; // Configurar en Vercel env vars
-const VAPID_SUBJECT     = 'mailto:seismosense@gmail.com';
+const MAG_THRESHOLD = 5.5;
+const CHECK_WINDOW  = 6 * 60 * 1000; // 6 minutos
 
-const FIREBASE_SERVER_KEY = process.env.FIREBASE_SERVER_KEY; // Configurar en Vercel env vars
-
-const MAG_THRESHOLD = 5.5; // Notificar M >= 5.5
-const CHECK_WINDOW  = 3 * 60 * 1000; // Ventana de 3 minutos (evitar duplicados)
-
-// Fuentes en cascada por velocidad
 const FEEDS = [
   {
     name: 'USGS',
@@ -50,10 +43,112 @@ async function fetchWithTimeout(url, ms = 8000) {
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timer);
     return res;
-  } catch(e) {
-    clearTimeout(timer);
-    throw e;
-  }
+  } catch(e) { clearTimeout(timer); throw e; }
+}
+
+// Obtener access token OAuth2 para Firebase V1 API
+async function getFirebaseAccessToken(serviceAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  
+  // Crear JWT manualmente (sin librerías externas)
+  const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  
+  const payload = btoa(JSON.stringify({
+    iss: serviceAccount.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now
+  })).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+  // Importar clave privada
+  const privateKeyPem = serviceAccount.private_key;
+  const pemContents = privateKeyPem.replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '').replace(/\n/g, '');
+  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8', binaryKey.buffer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false, ['sign']
+  );
+
+  const signingInput = `${header}.${payload}`;
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    cryptoKey,
+    new TextEncoder().encode(signingInput)
+  );
+
+  const sig = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+  const jwt = `${signingInput}.${sig}`;
+
+  // Intercambiar JWT por access token
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`
+  });
+
+  const tokenData = await tokenRes.json();
+  return tokenData.access_token;
+}
+
+// Enviar notificación FCM V1
+async function sendFCMV1(accessToken, projectId, topic, payload) {
+  const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+  
+  const message = {
+    message: {
+      topic: topic, // 'earthquakes-global' o 'earthquakes-{region}'
+      notification: {
+        title: payload.title,
+        body: payload.body
+      },
+      webpush: {
+        headers: { Urgency: 'high' },
+        notification: {
+          title: payload.title,
+          body: payload.body,
+          icon: 'https://seismosense.vercel.app/icons/icon-192.svg',
+          badge: 'https://seismosense.vercel.app/icons/badge-96.svg',
+          requireInteraction: payload.critical || false,
+          vibrate: payload.critical ? [300, 100, 300, 100, 600] : [200, 100, 200],
+          tag: payload.tag,
+          data: {
+            url: payload.url || 'https://seismosense.vercel.app/?tab=events',
+            magnitude: String(payload.magnitude || ''),
+            place: payload.place || ''
+          }
+        },
+        fcm_options: {
+          link: payload.url || 'https://seismosense.vercel.app/?tab=events'
+        }
+      },
+      data: {
+        magnitude: String(payload.magnitude || ''),
+        place: payload.place || '',
+        url: payload.url || 'https://seismosense.vercel.app/?tab=events',
+        tag: payload.tag || 'earthquake'
+      }
+    }
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(message)
+  });
+
+  const result = await res.json();
+  console.log('[FCM V1] Resultado:', JSON.stringify(result));
+  return result;
 }
 
 async function getRecentEarthquakes() {
@@ -67,14 +162,17 @@ async function getRecentEarthquakes() {
       const data = await res.json();
       const events = feed.parse(data)
         .filter(e => e.mag >= MAG_THRESHOLD && (now - e.time) < CHECK_WINDOW);
-      allEvents.push(...events);
-      if (events.length > 0) break; // Primera fuente que responde con datos gana
+      if (events.length > 0) {
+        allEvents.push(...events);
+        console.log(`[${feed.name}] ${events.length} eventos nuevos M${MAG_THRESHOLD}+`);
+        break;
+      }
     } catch(e) {
       console.warn(`[${feed.name}] falló:`, e.message);
     }
   }
 
-  // Deduplicar por coordenadas aproximadas
+  // Deduplicar
   const seen = new Set();
   return allEvents.filter(e => {
     const key = `${(e.lat/0.5).toFixed(0)}_${(e.lng/0.5).toFixed(0)}`;
@@ -84,86 +182,11 @@ async function getRecentEarthquakes() {
   });
 }
 
-function buildNotificationPayload(eq) {
-  const mag = eq.mag?.toFixed(1) || '?';
-  const isLarge = eq.mag >= 7.0;
-  const isMajor = eq.mag >= 6.5;
-
-  const emoji = eq.mag >= 7.0 ? '🚨' : eq.mag >= 6.0 ? '⚠️' : '📳';
-  const level = eq.mag >= 7.0 ? 'MAYOR' : eq.mag >= 6.0 ? 'FUERTE' : 'MODERADO';
-
-  return {
-    title: `${emoji} SISMO M${mag} — ${level}`,
-    body: `${eq.place} · Profundidad: ${eq.depth?.toFixed(0) || '?'} km`,
-    tag: `eq-${eq.id}`,
-    magnitude: eq.mag,
-    place: eq.place,
-    url: eq.url || `https://seismosense.vercel.app/?tab=events`,
-    type: isLarge ? 'critical' : 'earthquake',
-    timestamp: eq.time,
-    icon: '/icons/icon-192.svg',
-    badge: '/icons/badge-96.svg'
-  };
-}
-
-// Enviar push via Firebase FCM (para tokens FCM)
-async function sendFCMNotification(token, payload) {
-  if (!FIREBASE_SERVER_KEY) return;
-
-  const res = await fetch('https://fcm.googleapis.com/fcm/send', {
-    method: 'POST',
-    headers: {
-      'Authorization': `key=${FIREBASE_SERVER_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      to: token,
-      notification: {
-        title: payload.title,
-        body: payload.body,
-        icon: payload.icon,
-        badge: payload.badge,
-        tag: payload.tag,
-        click_action: payload.url
-      },
-      data: payload,
-      webpush: {
-        headers: { Urgency: 'high' },
-        notification: {
-          title: payload.title,
-          body: payload.body,
-          icon: payload.icon,
-          badge: payload.badge,
-          requireInteraction: payload.type === 'critical',
-          vibrate: payload.type === 'critical' ? [300, 100, 300, 100, 600] : [200, 100, 200]
-        }
-      }
-    })
-  });
-
-  return res.json();
-}
-
-// Enviar push via Web Push estándar (para suscripciones VAPID)
-async function sendWebPush(subscription, payload) {
-  // Web Push requiere firma VAPID con crypto — implementación simplificada
-  // En producción usar librería 'web-push' de npm
-  const res = await fetch(subscription.endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'TTL': '60'
-    },
-    body: JSON.stringify(payload)
-  });
-  return res.status;
-}
-
 export default async function handler(req, res) {
-  // Verificar que es llamada autorizada (desde GitHub Actions)
-  const authHeader = req.headers.authorization;
+  // Verificar autorización
   const cronSecret = process.env.CRON_SECRET;
-
+  const authHeader = req.headers.authorization;
+  
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -177,48 +200,59 @@ export default async function handler(req, res) {
 
     if (earthquakes.length === 0) {
       return res.status(200).json({
-        message: 'Sin sismos nuevos M5.5+ en los últimos 3 minutos',
+        message: `Sin sismos nuevos M${MAG_THRESHOLD}+`,
         checked: new Date().toISOString()
       });
     }
 
     console.log(`[SeismoSense] ${earthquakes.length} sismos nuevos detectados`);
 
-    const notifications = [];
+    // Obtener service account
+    const serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (!serviceAccountStr) {
+      console.warn('[SeismoSense] FIREBASE_SERVICE_ACCOUNT no configurado');
+      return res.status(200).json({
+        earthquakesDetected: earthquakes.length,
+        earthquakes: earthquakes.map(e => ({ mag: e.mag, place: e.place })),
+        warning: 'Firebase no configurado — sismos detectados pero no notificados'
+      });
+    }
+
+    const serviceAccount = JSON.parse(serviceAccountStr);
+    const accessToken = await getFirebaseAccessToken(serviceAccount);
+
+    const results = [];
 
     for (const eq of earthquakes) {
-      const payload = buildNotificationPayload(eq);
-      console.log(`[SeismoSense] Notificando: M${eq.mag} en ${eq.place}`);
+      const mag = eq.mag?.toFixed(1) || '?';
+      const isLarge = eq.mag >= 7.0;
+      const emoji = eq.mag >= 7.0 ? '🚨' : eq.mag >= 6.0 ? '⚠️' : '📳';
 
-      // TODO: Iterar sobre suscripciones guardadas en KV y enviar push
-      // Por ahora: log del evento detectado
-      // Cuando conectes KV:
-      /*
-      const { kv } = await import('@vercel/kv');
-      const keys = await kv.keys('sub:*');
-      for (const key of keys) {
-        const subData = await kv.get(key);
-        if (subData?.subscription) {
-          await sendWebPush(subData.subscription, payload);
-        }
-        if (subData?.fcmToken) {
-          await sendFCMNotification(subData.fcmToken, payload);
-        }
-      }
-      */
-
-      notifications.push({
-        id: eq.id,
+      const payload = {
+        title: `${emoji} Sismo M${mag} detectado`,
+        body: `${eq.place} · Prof: ${eq.depth?.toFixed(0) || '?'}km`,
+        tag: `eq-${eq.id}`,
         magnitude: eq.mag,
         place: eq.place,
-        notified: true
-      });
+        url: eq.url || 'https://seismosense.vercel.app/?tab=events',
+        critical: isLarge
+      };
+
+      // Enviar a topic global — todos los suscriptores reciben
+      const result = await sendFCMV1(
+        accessToken,
+        serviceAccount.project_id,
+        'earthquakes-global',
+        payload
+      );
+
+      results.push({ id: eq.id, mag: eq.mag, place: eq.place, fcm: result });
     }
 
     return res.status(200).json({
       success: true,
       earthquakesDetected: earthquakes.length,
-      notifications,
+      results,
       timestamp: new Date().toISOString()
     });
 
