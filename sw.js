@@ -153,10 +153,16 @@ self.addEventListener('message', event => {
   }
 
   if (event.data?.type === 'TEST_NOTIFICATION') {
-    self.registration.showNotification('🧪 SeismoSense — Prueba exitosa', {
-      body: 'Las alertas push están funcionando. Recibirás notificaciones de sismos M5.5+ en tiempo real.',
+    // Verificar que no se haya enviado ya en los últimos 10 segundos
+    const now = Date.now();
+    if (self._lastTestNotif && (now - self._lastTestNotif) < 10000) return;
+    self._lastTestNotif = now;
+
+    self.registration.showNotification('🌍 SeismoSense — Alertas activadas', {
+      body: 'Recibirás notificaciones de sismos M5.5+ en tiempo real, aunque el celular esté bloqueado.',
       icon: '/icons/icon-192.svg',
       badge: '/icons/badge-96.svg',
+      tag: 'seismosense-test', // tag único evita duplicados
       vibrate: [200, 100, 200],
       data: { url: '/' }
     });

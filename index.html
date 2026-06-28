@@ -2587,11 +2587,13 @@ async function requestNotifications() {
     localStorage.setItem('seismosense_notif', 'granted');
     localStorage.setItem('seismosense_sub_endpoint', subscription.endpoint.substring(0, 60));
 
-    // 6. Ocultar barra
+    // 6. Ocultar barra inmediatamente
     if (notifBar) notifBar.style.display = 'none';
 
-    // 7. Notificación de confirmación
-    reg.active?.postMessage({ type: 'TEST_NOTIFICATION' });
+    // 7. Notificación de confirmación — una sola vez
+    setTimeout(() => {
+      reg.active?.postMessage({ type: 'TEST_NOTIFICATION' });
+    }, 500);
 
     showNotifConfirm();
 
