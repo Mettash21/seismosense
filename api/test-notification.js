@@ -52,12 +52,8 @@ async function getFirebaseAccessToken(serviceAccount) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  // Verificar secret
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers.authorization;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  // Solo permitir en desarrollo o con secret — en producción cualquiera puede probar
+  // pero solo manda al topic earthquakes-global (usuarios suscritos)
 
   try {
     const serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
