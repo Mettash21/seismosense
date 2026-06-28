@@ -765,9 +765,34 @@ header {
 
 /* Mobile */
 @media (max-width: 768px) {
-  .sidebar { width: 100%; height: 45%; }
-  .app-body { flex-direction: column; }
-  #map { height: 55%; flex: none; }
+  .app-body {
+    flex-direction: column;
+    overflow: hidden;
+    height: calc(100vh - 52px - 40px);
+  }
+  .sidebar {
+    width: 100%;
+    height: 45%;
+    min-height: 200px;
+    max-height: 45%;
+    overflow-y: auto;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+  }
+  .map-container, [style*="flex:1"][style*="overflow:hidden"] {
+    flex: 1;
+    height: 55%;
+    min-height: 0;
+    position: relative;
+    z-index: 1;
+  }
+  #map {
+    position: absolute !important;
+    top: 0; left: 0; right: 0; bottom: 0;
+    height: 100% !important;
+    width: 100% !important;
+  }
 }
 
 /* Earthquake pulse animation on map */
@@ -875,7 +900,7 @@ header {
         <div class="alert-body" id="alertText">—</div>
       </div>
 
-      <div class="section-header">ZONAS POR PROBABILIDAD ESTIMADA</div>
+      <div class="section-header" id="zonesProbLabel">ZONAS POR PROBABILIDAD ESTIMADA</div>
       <div class="risk-list" id="riskList">
         <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:12px;">
           Calculando modelos estadísticos...
@@ -1104,11 +1129,64 @@ function toggleLang() {
 
 function applyTranslations() {
   const set = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
+  const setAll = (sel, txt) => document.querySelectorAll(sel).forEach(e => e.textContent = txt);
+  const setQ = (sel, txt) => { const e = document.querySelector(sel); if (e) e.textContent = txt; };
+
+  // Header
   set('liveBadgeText', t('liveData'));
+
+  // Tabs
+  const tabs = document.querySelectorAll('.tab-btn');
+  const tabKeys = ['tabRisk','tabEvents','tabModels'];
+  tabs.forEach((tab, i) => { if (tabKeys[i]) tab.textContent = t(tabKeys[i]); });
+
+  // Stats labels
+  const statLabels = document.querySelectorAll('.stat-label');
+  const labelKeys = ['earthquakes24h','biggestToday','criticalZones','globalIndex'];
+  statLabels.forEach((lbl, i) => { if (labelKeys[i]) lbl.textContent = t(labelKeys[i]); });
+
+  // Stat sub-labels
+  const statSubs = document.querySelectorAll('.stat-sub');
+  if (statSubs[0]) statSubs[0].textContent = 'M ≥ 2.5 ' + (currentLang === 'en' ? 'global' : 'global');
+  if (statSubs[1]) statSubs[1].textContent = currentLang === 'en' ? 'relative activity' : 'actividad relativa';
+
+  // Sección zonas
+  set('zonesProbLabel', t('zonesByProb'));
+
   // Leyenda
   const legendItems = document.querySelectorAll('.legend-item span:last-child');
   const legendKeys = ['low','moderate','high','critical','extreme'];
   legendItems.forEach((el, i) => { if (legendKeys[i]) el.textContent = t(legendKeys[i]); });
+
+  // Notif bar
+  const notifTitle = document.querySelector('#notifBar strong');
+  if (notifTitle) notifTitle.textContent = currentLang === 'en' ? '🔔 Enable alerts' : '🔔 Activa las alertas';
+  const notifSub = document.querySelector('#notifBar span');
+  if (notifSub) notifSub.textContent = currentLang === 'en' 
+    ? 'Notifications for M5.5+ earthquakes and critical zones'
+    : 'Notificaciones de sismos M5.5+ y zonas críticas';
+  const notifBtn = document.querySelector('#notifBar button');
+  if (notifBtn) notifBtn.textContent = t('activate');
+
+  // Install bar
+  const installTitle = document.querySelector('#pwaInstallBar strong');
+  if (installTitle) installTitle.textContent = currentLang === 'en' ? '📲 Install SeismoSense' : '📲 Instalar SeismoSense';
+  const installSub = document.querySelector('#pwaInstallBar span');
+  if (installSub) installSub.textContent = currentLang === 'en'
+    ? 'Install the app to receive real-time seismic alerts'
+    : 'Instala la app para recibir alertas sísmicas en tiempo real';
+  const installBtn = document.querySelector('#pwaInstallBar button:first-of-type');
+  if (installBtn) installBtn.textContent = t('install');
+
+  // Panel técnico
+  set('activeSources', document.getElementById('activeSources')?.textContent || '—');
+  const techLabels = document.querySelectorAll('.tech-key');
+  // Solo traducir labels conocidos
+  techLabels.forEach(label => {
+    const txt = label.textContent;
+    if (txt === 'Fuentes activas' || txt === 'Active sources') 
+      label.textContent = t('activeSourcesLabel');
+  });
 }
 const RISK_ZONES = [
   {
