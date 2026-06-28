@@ -167,8 +167,8 @@ header {
 
 .tab:hover:not(.active) { color: var(--text); }
 
-.tab-content { display: none; flex: 1; overflow-y: auto; }
-.tab-content.active { display: flex; flex-direction: column; }
+.tab-content { display: none; flex: 1; overflow-y: auto; min-height: 0; }
+.tab-content.active { display: flex; flex-direction: column; overflow-y: auto; min-height: 0; }
 
 /* ── Global Stats ── */
 .global-stats {
@@ -768,17 +768,35 @@ header {
   .app-body {
     flex-direction: column;
     overflow: hidden;
-    height: calc(100vh - 52px - 40px);
+    height: calc(100dvh - 52px - 40px);
   }
   .sidebar {
     width: 100%;
     height: 45%;
     min-height: 200px;
     max-height: 45%;
-    overflow-y: auto;
+    overflow: hidden;
     flex-shrink: 0;
     position: relative;
     z-index: 10;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-tabs {
+    flex-shrink: 0;
+  }
+  .tab-content {
+    flex: 1;
+    overflow-y: auto !important;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tab-content.active {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto !important;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
   }
   .map-container, [style*="flex:1"][style*="overflow:hidden"] {
     flex: 1;
@@ -1145,10 +1163,41 @@ function applyTranslations() {
   const labelKeys = ['earthquakes24h','biggestToday','criticalZones','globalIndex'];
   statLabels.forEach((lbl, i) => { if (labelKeys[i]) lbl.textContent = t(labelKeys[i]); });
 
-  // Stat sub-labels
-  const statSubs = document.querySelectorAll('.stat-sub');
-  if (statSubs[0]) statSubs[0].textContent = 'M ≥ 2.5 ' + (currentLang === 'en' ? 'global' : 'global');
-  if (statSubs[1]) statSubs[1].textContent = currentLang === 'en' ? 'relative activity' : 'actividad relativa';
+  // Stat sub-labels — buscar por texto
+  document.querySelectorAll('.stat-sub').forEach(el => {
+    if (el.textContent.includes('actividad') || el.textContent.includes('activity')) {
+      el.textContent = currentLang === 'en' ? 'relative activity' : 'actividad relativa';
+    }
+    if (el.textContent.includes('prob >')) {
+      el.textContent = 'prob > 60%';
+    }
+  });
+
+  // Alert banner
+  const alertBanner = document.querySelector('.alert-banner .alert-title');
+  if (alertBanner) alertBanner.textContent = t('alertActive');
+
+  // Panel técnico — traducir labels mezclados
+  document.querySelectorAll('.tech-key').forEach(label => {
+    const txt = label.textContent.trim();
+    const techMap = {
+      'Fuentes activas': { en: 'Active sources' },
+      'Active sources': { es: 'Fuentes activas' },
+      'Ventana temporal': { en: 'Time window' },
+      'Time window': { es: 'Ventana temporal' },
+      'Radio espacial': { en: 'Spatial radius' },
+      'Spatial radius': { es: 'Radio espacial' },
+      'Eventos cargados': { en: 'Events loaded' },
+      'Events loaded': { es: 'Eventos cargados' },
+      'Actualización': { en: 'Update rate' },
+      'Update rate': { es: 'Actualización' },
+      'Deuda sísmica detectada': { en: 'Seismic debt detected' },
+      'Seismic debt detected': { es: 'Deuda sísmica detectada' },
+    };
+    if (techMap[txt]?.[currentLang]) {
+      label.textContent = techMap[txt][currentLang];
+    }
+  });
 
   // Sección zonas
   set('zonesProbLabel', t('zonesByProb'));
