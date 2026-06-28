@@ -1200,13 +1200,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Forzar recalculo de tamaño del mapa tras render inicial
   setTimeout(() => { if (mapInstance) mapInstance.invalidateSize(); }, 200);
 
-  // Cargar datos en vivo
-  setTimeout(() => loadAllSources(), 1000);
+  // Fetch específico zonas activas (réplicas Venezuela) — primero que todo
+  setTimeout(() => fetchActiveZones(), 500);
+  setInterval(() => fetchActiveZones(), 600000);
+
+  // Cargar datos en vivo generales
+  setTimeout(() => loadAllSources(), 1500);
   setInterval(() => loadAllSources(), 300000);
 
-  // Cargar historial 2 años por zona (en paralelo, sin bloquear)
-  // Esperar 3s para no competir con la carga inicial
-  setTimeout(() => loadHistoricalByZone(), 3000);
+  // Cargar historial 2 años por zona
+  setTimeout(() => loadHistoricalByZone(), 6000);
 });
 
 function updateClock() {
@@ -1575,6 +1578,48 @@ function setLoadingText(t) {
   if (el) el.textContent = t;
 }
 async function loadUSGSData() { return loadAllSources(); }
+
+// ── Fetch específico para zonas con alerta activa ──
+// Trae todos los eventos M2.0+ de los últimos 10 días en el bbox exacto
+async function fetchActiveZones() {
+  const alertZones = RISK_ZONES.filter(z => z.alert);
+  console.log(`[ALERT ZONE] Iniciando fetch para ${alertZones.length} zonas activas`);
+  const promises = alertZones.map(async zone => {
+    const b = zone.bbox;
+    const start = new Date(Date.now() - 10 * 86400000).toISOString().split('T')[0];
+    const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson`
+      + `&starttime=${start}`
+      + `&minlatitude=${b.minLat}&maxlatitude=${b.maxLat}`
+      + `&minlongitude=${b.minLng}&maxlongitude=${b.maxLng}`
+      + `&minmagnitude=2.0&orderby=time&limit=1000`;
+    console.log(`[ALERT ZONE] Consultando ${zone.name}: ${url.substring(0,80)}...`);
+    try {
+      const res = await fetchWithTimeout(url, 12000);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const features = data.features || [];
+      console.log(`[ALERT ZONE] ${zone.name}: ${features.length} eventos recibidos`);
+      if (features.length > 0) {
+        mergeIntoPool(features, 'usgs');
+        earthquakeData = Array.from(eventPool.values()).map(ev => ({
+          id: ev.id,
+          properties: { mag: ev.mag, place: ev.place, time: ev.time, url: ev.url, _source: ev.source },
+          geometry: { coordinates: [ev.lng, ev.lat, ev.depth] }
+        }));
+        computeRiskModels();
+        renderRiskList();
+        renderMap();
+        updateGlobalStats();
+        // Diagnóstico post-actualización
+        const vzla = riskZonesComputed.find(z => z.id === 'yaracuy-venezuela');
+        console.log(`[ALERT ZONE POST] Venezuela: prob=${(vzla?.probability*100).toFixed(1)}%, nearby30d=${vzla?.nearbyCount}, rank=${riskZonesComputed.indexOf(vzla)+1}`);
+      }
+    } catch(e) {
+      console.warn(`[ALERT ZONE] ${zone.name} falló:`, e.message);
+    }
+  });
+  await Promise.allSettled(promises);
+}
 
 // ══════════════════════════════════════════════════════════
 //  MOTOR ESTADÍSTICO MULTIVARIABLE — Recalibrado
