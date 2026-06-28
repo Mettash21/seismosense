@@ -816,9 +816,19 @@ header {
     <div class="logo-name">Seismo<span>Sense</span></div>
   </div>
   <div class="header-right">
+    <button id="langToggle" onclick="toggleLang()" style="
+      background:transparent;border:1px solid rgba(255,255,255,0.2);
+      color:#c8d8f0;padding:4px 10px;border-radius:6px;
+      font-family:'Space Grotesk',sans-serif;font-size:11px;
+      font-weight:600;cursor:pointer;letter-spacing:0.5px;
+      transition:all 0.2s;
+    " onmouseover="this.style.borderColor='#3d8bff';this.style.color='#fff'"
+       onmouseout="this.style.borderColor='rgba(255,255,255,0.2)';this.style.color='#c8d8f0'">
+      🌐 EN
+    </button>
     <div class="live-badge">
       <div class="live-dot"></div>
-      DATOS EN VIVO
+      <span id="liveBadgeText">DATOS EN VIVO</span>
     </div>
     <div class="update-time" id="updateTime">--:--:--</div>
   </div>
@@ -1034,7 +1044,72 @@ header {
 //  SeismoSense — Motor Estadístico + USGS Real Data
 // ══════════════════════════════════════════════════════════
 
-// ── Zonas de riesgo global (base geológica real) ──
+// ── Sistema de idioma ES/EN ──
+let currentLang = localStorage.getItem('seismosense-lang') || 'es';
+
+const TRANSLATIONS = {
+  es: {
+    liveData:'DATOS EN VIVO', tabRisk:'⚠ RIESGO', tabEvents:'🌐 EVENTOS', tabModels:'📊 MODELOS',
+    earthquakes24h:'SISMOS 24H', biggestToday:'MAYOR HOY', criticalZones:'ZONAS CRÍTICAS', globalIndex:'ÍNDICE GLOBAL',
+    relativeActivity:'actividad relativa', alertActive:'⚡ ALERTA ESTADÍSTICA ACTIVA',
+    zonesByProb:'ZONAS POR PROBABILIDAD ESTIMADA', activeFaults:'FALLAS ACTIVAS',
+    probEstimated:'PROBABILIDAD ESTIMADA',
+    low:'Baja (<30%)', moderate:'Moderada (30–50%)', high:'Alta (50–65%)', critical:'Crítica (65–80%)', extreme:'Extrema (>80%)',
+    riskLow:'Bajo', riskMod:'Moderado', riskHigh:'Alto', riskCrit:'Crítico', riskExt:'Extremo',
+    trendUp:'↑ Subiendo', trendDown:'↓ Bajando', trendStable:'→ Estable',
+    noAlerts:'Sin alertas críticas activas',
+    probCritical:'Probabilidad Crítica', probHigh:'Probabilidad Alta',
+    probModerate:'Probabilidad Moderada', probLow:'Probabilidad Baja',
+    seismicDebt:'Deuda sísmica detectada', noDebt:'Sin deuda sísmica significativa',
+    activeSourcesLabel:'Fuentes activas', install:'Instalar', activate:'Activar',
+  },
+  en: {
+    liveData:'LIVE DATA', tabRisk:'⚠ RISK', tabEvents:'🌐 EVENTS', tabModels:'📊 MODELS',
+    earthquakes24h:'EARTHQUAKES 24H', biggestToday:'BIGGEST TODAY', criticalZones:'CRITICAL ZONES', globalIndex:'GLOBAL INDEX',
+    relativeActivity:'relative activity', alertActive:'⚡ STATISTICAL ALERT ACTIVE',
+    zonesByProb:'ZONES BY ESTIMATED PROBABILITY', activeFaults:'ACTIVE FAULTS',
+    probEstimated:'ESTIMATED PROBABILITY',
+    low:'Low (<30%)', moderate:'Moderate (30–50%)', high:'High (50–65%)', critical:'Critical (65–80%)', extreme:'Extreme (>80%)',
+    riskLow:'Low', riskMod:'Moderate', riskHigh:'High', riskCrit:'Critical', riskExt:'Extreme',
+    trendUp:'↑ Rising', trendDown:'↓ Falling', trendStable:'→ Stable',
+    noAlerts:'No active critical alerts',
+    probCritical:'Critical Probability', probHigh:'High Probability',
+    probModerate:'Moderate Probability', probLow:'Low Probability',
+    seismicDebt:'Seismic debt detected', noDebt:'No significant seismic debt',
+    activeSourcesLabel:'Active sources', install:'Install', activate:'Enable',
+  }
+};
+
+function t(key) { return TRANSLATIONS[currentLang]?.[key] || TRANSLATIONS.es[key] || key; }
+
+function getRiskLabel(level) {
+  const map = { low: t('riskLow'), moderate: t('riskMod'), high: t('riskHigh'), critical: t('riskCrit'), extreme: t('riskExt') };
+  return map[level] || level;
+}
+
+function getTrend(trend) {
+  return trend === 'up' ? t('trendUp') : trend === 'down' ? t('trendDown') : t('trendStable');
+}
+
+function toggleLang() {
+  currentLang = currentLang === 'es' ? 'en' : 'es';
+  localStorage.setItem('seismosense-lang', currentLang);
+  const btn = document.getElementById('langToggle');
+  if (btn) btn.textContent = `🌐 ${currentLang === 'es' ? 'EN' : 'ES'}`;
+  applyTranslations();
+  renderRiskList();
+  renderEventsList();
+  updateGlobalStats();
+}
+
+function applyTranslations() {
+  const set = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
+  set('liveBadgeText', t('liveData'));
+  // Leyenda
+  const legendItems = document.querySelectorAll('.legend-item span:last-child');
+  const legendKeys = ['low','moderate','high','critical','extreme'];
+  legendItems.forEach((el, i) => { if (legendKeys[i]) el.textContent = t(legendKeys[i]); });
+}
 const RISK_ZONES = [
   {
     id: 'eje-cafetero', name: 'Eje Cafetero', country: 'Colombia',
@@ -1196,6 +1271,11 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(updateClock, 1000);
 
   useFallbackData();
+
+  // Aplicar idioma guardado
+  const btn = document.getElementById('langToggle');
+  if (btn) btn.textContent = `🌐 ${currentLang === 'es' ? 'EN' : 'ES'}`;
+  applyTranslations();
 
   // Forzar recalculo de tamaño del mapa tras render inicial
   setTimeout(() => { if (mapInstance) mapInstance.invalidateSize(); }, 200);
@@ -1827,16 +1907,6 @@ function getRiskLevel(prob) {
   return 'low';
 }
 
-function getRiskLabel(level) {
-  return {
-    low: 'Baja',
-    moderate: 'Moderada',
-    high: 'Alta',
-    critical: 'Crítica',
-    extreme: 'Extrema'
-  }[level] || level;
-}
-
 function getRiskColor(level) {
   return {
     low: '#2ecc71',
@@ -1892,7 +1962,7 @@ function renderRiskList() {
         <span class="risk-meta-tag">${zone.recentCount} sismos/7d</span>
         <span class="risk-meta-tag">b=${zone.computedBValue.toFixed(2)}</span>
         ${zone.deuda ? '<span class="risk-meta-tag" style="color:var(--risk-crit-c)">⚠ DEUDA</span>' : ''}
-        <span class="risk-meta-tag" style="color:${zone.trend==='up'?'#e74c3c':zone.trend==='down'?'#2ecc71':'#6b84a8'}">${zone.trend==='up'?'↑ Subiendo':zone.trend==='down'?'↓ Bajando':'→ Estable'}</span>
+        <span class="risk-meta-tag" style="color:${zone.trend==='up'?'#e74c3c':zone.trend==='down'?'#2ecc71':'#6b84a8'}">${getTrend(zone.trend)}</span>
       </div>
     `;
     div.onclick = () => showZoneDetail(zone);
@@ -2402,58 +2472,135 @@ function dismissInstall() {
 }
 
 // ── Notifications ──
+// ══════════════════════════════════════════════════════
+//  PUSH NOTIFICATIONS — Firebase FCM + Web Push VAPID
+// ══════════════════════════════════════════════════════
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyClp46IUfpzz9RDWpbCHl66Slt_7dwyopA",
+  authDomain: "seismosense-218f8.firebaseapp.com",
+  projectId: "seismosense-218f8",
+  storageBucket: "seismosense-218f8.firebasestorage.app",
+  messagingSenderId: "326324070307",
+  appId: "1:326324070307:web:eaeffb11b607fea8b0dc16"
+};
+
+const VAPID_PUBLIC_KEY = 'BHN9FBVJRBenZ1QUu25vScCSl7jLVZGLz0V8aGszC_KqyF5QbhtQIDyWY6DgJrEqCSdJNB87LaOU6ndq5dfTW70';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
 async function requestNotifications() {
   const notifBar = document.getElementById('notifBar');
-  
+
   if (!('Notification' in window)) {
-    alert('Tu navegador no soporta notificaciones push.');
+    showToast('Tu navegador no soporta notificaciones push.', 'error');
     return;
   }
 
-  const permission = await Notification.requestPermission();
-  
-  if (permission === 'granted') {
-    if (notifBar) notifBar.style.display = 'none';
-    
-    // Enviar notificación de confirmación
-    if ('serviceWorker' in navigator) {
-      const reg = await navigator.serviceWorker.ready;
-      reg.active?.postMessage({ type: 'SEND_TEST_NOTIFICATION' });
+  if (!('serviceWorker' in navigator)) {
+    showToast('Se requiere Service Worker para las alertas.', 'error');
+    return;
+  }
+
+  try {
+    // 1. Pedir permiso al usuario
+    const permission = await Notification.requestPermission();
+
+    if (permission === 'denied') {
+      if (notifBar) notifBar.innerHTML = `
+        <span style="font-size:11px;color:#e74c3c;">
+          ⚠ Notificaciones bloqueadas. Actívalas en la configuración del navegador.
+        </span>`;
+      return;
     }
-    
-    // Guardar preferencia
+
+    if (permission !== 'granted') return;
+
+    // 2. Obtener registro del Service Worker
+    const reg = await navigator.serviceWorker.ready;
+
+    // 3. Suscribir al Web Push con VAPID
+    let subscription = await reg.pushManager.getSubscription();
+
+    if (!subscription) {
+      subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+
+    console.log('[Push] Suscripción obtenida:', subscription.endpoint.substring(0, 60) + '...');
+
+    // 4. Enviar suscripción al servidor
+    try {
+      await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+          zone: 'global',
+          lang: currentLang,
+          timestamp: Date.now()
+        })
+      });
+      console.log('[Push] Suscripción enviada al servidor');
+    } catch(e) {
+      console.warn('[Push] No se pudo guardar en servidor, funcionará localmente:', e.message);
+    }
+
+    // 5. Guardar localmente
     localStorage.setItem('seismosense_notif', 'granted');
+    localStorage.setItem('seismosense_sub_endpoint', subscription.endpoint.substring(0, 60));
+
+    // 6. Ocultar barra
+    if (notifBar) notifBar.style.display = 'none';
+
+    // 7. Notificación de confirmación
+    reg.active?.postMessage({ type: 'TEST_NOTIFICATION' });
+
     showNotifConfirm();
-    
-  } else if (permission === 'denied') {
-    if (notifBar) notifBar.innerHTML = `
-      <span style="font-size:11px;color:#e74c3c;">
-        ⚠ Notificaciones bloqueadas. Actívalas en configuración del navegador.
-      </span>
-    `;
+
+  } catch(e) {
+    console.error('[Push] Error:', e);
+    showToast('Error al activar notificaciones: ' + e.message, 'error');
   }
 }
 
-function showNotifConfirm() {
+function showToast(msg, type = 'info') {
+  const color = type === 'error' ? '#e74c3c' : type === 'success' ? '#2ecc71' : '#3d8bff';
   const toast = document.createElement('div');
   toast.style.cssText = `
     position:fixed;bottom:24px;right:16px;
-    background:#0f1830;border:1px solid #2ecc71;
+    background:#0f1830;border:1px solid ${color};
     border-radius:8px;padding:12px 16px;
-    font-size:12px;color:#2ecc71;
-    z-index:9999;max-width:260px;
-    animation:fadeIn 0.3s ease;
+    font-size:12px;color:${color};
+    z-index:9999;max-width:280px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.4);
   `;
-  toast.innerHTML = '✅ <strong>Alertas activadas</strong><br><span style="color:#6b84a8;font-size:10px;">Recibirás notificaciones de sismos M5.5+ y zonas críticas</span>';
+  toast.innerHTML = msg;
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 4000);
+  setTimeout(() => toast.remove(), 5000);
 }
 
-// ── Mostrar barra de notificaciones si no están activas ──
+function showNotifConfirm() {
+  showToast(
+    '✅ <strong>Alertas activadas</strong><br><span style="color:#6b84a8;font-size:10px;">Recibirás notificaciones de sismos M5.5+ aunque la app esté cerrada</span>',
+    'success'
+  );
+}
+
+// ── Mostrar barra si no están activas ──
 window.addEventListener('DOMContentLoaded', () => {
   const notifBar = document.getElementById('notifBar');
   const stored = localStorage.getItem('seismosense_notif');
-  
+
   if (notifBar && stored !== 'granted' && 'Notification' in window && Notification.permission !== 'granted') {
     setTimeout(() => { notifBar.style.display = 'flex'; }, 3000);
   }
