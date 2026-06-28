@@ -1666,14 +1666,43 @@ function computeRiskModels() {
       ? Math.min(0.15, Math.max(0, (rate24h / rateAvg - 1.5) * 0.05))
       : 0;
 
-    // ── 7. Combinar todos los componentes ──
-    // Base geológica + ETAS + G-R + Deuda + Coulomb + Clustering
-    const rawProb = zone.baseRisk * 0.35   // peso base geológico
-      + etasProb   * 0.30                  // peso actividad reciente
-      + grContrib  * 1.00                  // b-value
-      + seismicDebt * 1.00                 // deuda sísmica
-      + coulombContrib * 1.00              // transferencia estrés
-      + clusterAnomaly * 1.00;             // anomalía 24h
+    // ── 7. Combinar todos los componentes con pesos normalizados ──
+    // Lógica: si hay actividad reciente, ETAS domina.
+    // Si no hay actividad, deuda sísmica + G-R toman el control.
+    // Nunca dejar que baseRisk solo lleve a zona crítica.
+
+    const hasRecentActivity = nearby7d.length > 0;
+    const hasSignificantEvent = nearby7d.some(e => (e.properties.mag || 0) >= 5.0);
+
+    let rawProb;
+    if (hasSignificantEvent) {
+      // Evento M5+ reciente: ETAS lidera
+      rawProb = etasProb * 0.55
+        + zone.baseRisk * 0.15
+        + grContrib * 0.10
+        + seismicDebt * 0.10
+        + coulombContrib * 0.08
+        + clusterAnomaly * 0.02;
+    } else if (hasRecentActivity) {
+      // Actividad menor: balance ETAS + geología
+      rawProb = etasProb * 0.35
+        + zone.baseRisk * 0.20
+        + grContrib * 0.18
+        + seismicDebt * 0.15
+        + coulombContrib * 0.10
+        + clusterAnomaly * 0.02;
+    } else {
+      // Sin actividad reciente: deuda y geología dominan, cap a 0.65
+      rawProb = Math.min(0.65,
+        zone.baseRisk * 0.30
+        + grContrib * 0.28
+        + seismicDebt * 0.28
+        + coulombContrib * 0.14
+      );
+    }
+
+    // Boost explícito para zonas con alerta activa (evento reciente real)
+    if (zone.alert) rawProb = Math.min(0.92, rawProb + 0.15);
 
     // Limitar a rango útil [0.05, 0.92]
     const probability = Math.max(0.05, Math.min(0.92, rawProb));
