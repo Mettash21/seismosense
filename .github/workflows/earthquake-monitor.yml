@@ -1,0 +1,48 @@
+# .github/workflows/earthquake-monitor.yml
+# Cron gratuito: ping cada 2 minutos a la Vercel Function detectora
+# GitHub Actions da 2000 min/mes gratis en repos públicos
+# 2 min x 60 x 24 x 30 = 21.600 llamadas/mes → gratis
+
+name: 🌍 SeismoSense — Monitor Sísmico
+
+on:
+  schedule:
+    # GitHub Actions mínimo es cada 5 minutos
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # permite correr manualmente desde GitHub
+
+jobs:
+  check-earthquakes:
+    name: Detectar sismos nuevos
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: 🔍 Verificar sismos M5.5+
+        run: |
+          echo "⏰ $(date -u '+%Y-%m-%d %H:%M:%S UTC') — Verificando sismos..."
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --max-time 30 \
+            "https://seismosense.vercel.app/api/check-earthquakes")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          
+          echo "📡 HTTP Status: $HTTP_CODE"
+          echo "📋 Response: $BODY"
+          
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Error en la API: $HTTP_CODE"
+            exit 1
+          fi
+          
+          echo "✅ Verificación completada"
+
+      - name: 📊 Log resultado
+        if: always()
+        run: |
+          echo "🏁 Monitor completado: $(date -u '+%H:%M:%S UTC')"
