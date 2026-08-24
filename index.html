@@ -237,6 +237,31 @@ header {
 
 .alert-body { font-size: 11px; color: var(--text); line-height: 1.4; }
 
+/* ── Proximity banner (near-me alerts) ── */
+.proximity-banner {
+  margin: 10px 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-left: 3px solid #ff3b30;
+  background: rgba(255,59,48,0.10);
+  display: none;
+  flex-shrink: 0;
+  animation: proximityPulse 1.5s ease-in-out infinite;
+}
+.proximity-banner.visible { display: block; }
+@keyframes proximityPulse {
+  0%, 100% { background: rgba(255,59,48,0.10); }
+  50% { background: rgba(255,59,48,0.22); }
+}
+.proximity-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ff3b30;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+.proximity-body { font-size: 11px; color: var(--text); line-height: 1.4; }
+
 /* ── Risk list ── */
 .section-header {
   padding: 10px 12px 6px;
@@ -527,6 +552,13 @@ header {
   color: white;
 }
 
+.map-btn.emergency {
+  background: #ff3b30;
+  border-color: #ff3b30;
+  color: white;
+}
+.map-btn.emergency:hover { background: #d9291f; }
+
 /* Legend */
 .map-legend {
   position: absolute;
@@ -763,6 +795,71 @@ header {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 2px; }
 
+/* Emergency modal */
+.emergency-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(6,10,20,0.85);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.emergency-modal.open { display: flex; }
+.emergency-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  max-width: 360px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.emergency-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.emergency-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ff3b30;
+}
+.emergency-country {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+}
+.emergency-numbers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.emergency-num-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  text-decoration: none;
+  color: var(--bright);
+  transition: all 0.2s;
+}
+.emergency-num-btn:hover { border-color: #ff3b30; background: rgba(255,59,48,0.08); }
+.emergency-num-label { font-size: 12px; font-weight: 600; }
+.emergency-num-value {
+  font-family: 'Space Mono', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ff3b30;
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .app-body {
@@ -913,6 +1010,11 @@ header {
         </div>
       </div>
 
+      <div class="proximity-banner" id="proximityBanner">
+        <div class="proximity-title">📍 SISMO CERCA DE TU UBICACIÓN</div>
+        <div class="proximity-body" id="proximityText">—</div>
+      </div>
+
       <div class="alert-banner" id="alertBanner">
         <div class="alert-title">⚡ ALERTA ESTADÍSTICA ACTIVA</div>
         <div class="alert-body" id="alertText">—</div>
@@ -1012,6 +1114,35 @@ header {
         </div>
 
         <div class="tech-section">
+          <div class="tech-title">📍 ALERTAS DE PROXIMIDAD</div>
+          <div style="font-size:10px;color:var(--text-dim);line-height:1.5;margin-bottom:8px;">
+            Detecta sismos reales cerca de tu ubicación GPS exacta, con umbrales escalonados por distancia — independiente del modelo estadístico de zonas.
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Estado GPS</span>
+            <span class="tech-val" id="gpsStatus">No activado</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Umbral &lt;50km</span>
+            <span class="tech-val">M ≥ 3.0</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Umbral &lt;150km</span>
+            <span class="tech-val">M ≥ 4.0</span>
+          </div>
+          <div class="tech-row">
+            <span class="tech-key">Umbral &lt;300km</span>
+            <span class="tech-val">M ≥ 5.0</span>
+          </div>
+          <button onclick="requestProximityAlerts()" style="
+            margin-top:10px;width:100%;background:var(--accent);border:none;color:white;
+            padding:8px;border-radius:6px;font-size:11px;font-weight:600;
+            font-family:'Space Grotesk',sans-serif;cursor:pointer;">
+            Activar alertas de proximidad
+          </button>
+        </div>
+
+        <div class="tech-section">
           <div class="tech-title">📡 FUENTES DE DATOS</div>
           <div class="tech-row">
             <span class="tech-key">Fuentes activas</span>
@@ -1050,6 +1181,7 @@ header {
       <button class="map-btn active" id="btnRisk" onclick="setMapMode('risk')">🎯 Riesgo</button>
       <button class="map-btn" id="btnSismos" onclick="setMapMode('sismos')">💥 Sismos</button>
       <button class="map-btn" id="btnFaults" onclick="setMapMode('faults')">🗺 Fallas</button>
+      <button class="map-btn emergency" onclick="openEmergencyModal()">🚨 Emergencias</button>
     </div>
 
     <div class="map-legend">
@@ -1079,6 +1211,18 @@ header {
       <div id="detailFaults"></div>
       <div id="detailHistory"></div>
     </div>
+  </div>
+</div>
+
+<!-- Emergency numbers modal -->
+<div class="emergency-modal" id="emergencyModal">
+  <div class="emergency-card">
+    <div class="emergency-header">
+      <div class="emergency-title">🚨 Líneas de emergencia</div>
+      <button class="detail-close" onclick="closeEmergencyModal()">×</button>
+    </div>
+    <div class="emergency-country" id="emergencyCountry">Detectando tu ubicación...</div>
+    <div class="emergency-numbers" id="emergencyNumbers"></div>
   </div>
 </div>
 
@@ -1147,8 +1291,6 @@ function toggleLang() {
 
 function applyTranslations() {
   const set = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
-  const setAll = (sel, txt) => document.querySelectorAll(sel).forEach(e => e.textContent = txt);
-  const setQ = (sel, txt) => { const e = document.querySelector(sel); if (e) e.textContent = txt; };
 
   // Header
   set('liveBadgeText', t('liveData'));
@@ -1163,7 +1305,7 @@ function applyTranslations() {
   const labelKeys = ['earthquakes24h','biggestToday','criticalZones','globalIndex'];
   statLabels.forEach((lbl, i) => { if (labelKeys[i]) lbl.textContent = t(labelKeys[i]); });
 
-  // Stat sub-labels — buscar por texto
+  // Stat sub-labels
   document.querySelectorAll('.stat-sub').forEach(el => {
     if (el.textContent.includes('actividad') || el.textContent.includes('activity')) {
       el.textContent = currentLang === 'en' ? 'relative activity' : 'actividad relativa';
@@ -1228,9 +1370,7 @@ function applyTranslations() {
   if (installBtn) installBtn.textContent = t('install');
 
   // Panel técnico
-  set('activeSources', document.getElementById('activeSources')?.textContent || '—');
   const techLabels = document.querySelectorAll('.tech-key');
-  // Solo traducir labels conocidos
   techLabels.forEach(label => {
     const txt = label.textContent;
     if (txt === 'Fuentes activas' || txt === 'Active sources') 
@@ -1370,6 +1510,36 @@ const RISK_ZONES = [
   }
 ];
 
+// ── Emergency numbers database ──
+const EMERGENCY_NUMBERS = {
+  CO: { name: 'Colombia', numbers: [{ label: 'Línea única de emergencias', value: '123' }] },
+  VE: { name: 'Venezuela', numbers: [{ label: 'Emergencias / Protección Civil', value: '911' }] },
+  CL: { name: 'Chile', numbers: [{ label: 'Carabineros', value: '133' }, { label: 'Bomberos', value: '132' }, { label: 'Ambulancia (SAMU)', value: '131' }] },
+  PE: { name: 'Perú', numbers: [{ label: 'Emergencias (PNP/Bomberos/SAMU)', value: '911' }] },
+  MX: { name: 'México', numbers: [{ label: 'Emergencias', value: '911' }] },
+  EC: { name: 'Ecuador', numbers: [{ label: 'ECU 911', value: '911' }] },
+  BO: { name: 'Bolivia', numbers: [{ label: 'Emergencias (redirige)', value: '911' }] },
+  AR: { name: 'Argentina', numbers: [{ label: 'Emergencias', value: '911' }] },
+  BR: { name: 'Brasil', numbers: [{ label: 'Policía', value: '190' }, { label: 'Bomberos', value: '193' }, { label: 'SAMU', value: '192' }] },
+  US: { name: 'Estados Unidos', numbers: [{ label: 'Emergencias', value: '911' }] },
+  JP: { name: 'Japón', numbers: [{ label: 'Policía', value: '110' }, { label: 'Bomberos/Ambulancia', value: '119' }] },
+  ID: { name: 'Indonesia', numbers: [{ label: 'Emergencias', value: '112' }] },
+  TR: { name: 'Türkiye', numbers: [{ label: 'Emergencias', value: '112' }] },
+  IR: { name: 'Irán', numbers: [{ label: 'Emergencias', value: '112' }, { label: 'Policía', value: '110' }] },
+  NP: { name: 'Nepal', numbers: [{ label: 'Policía', value: '100' }, { label: 'Ambulancia', value: '102' }] },
+  IN: { name: 'India', numbers: [{ label: 'Emergencias', value: '112' }] },
+  AF: { name: 'Afganistán', numbers: [{ label: 'Policía', value: '119' }] },
+  PK: { name: 'Pakistán', numbers: [{ label: 'Emergencias', value: '15' }] },
+  IT: { name: 'Italia', numbers: [{ label: 'Emergencias', value: '112' }] },
+  GR: { name: 'Grecia', numbers: [{ label: 'Emergencias', value: '112' }] },
+  ES: { name: 'España', numbers: [{ label: 'Emergencias', value: '112' }] },
+  CA: { name: 'Canadá', numbers: [{ label: 'Emergencias', value: '911' }] },
+  NZ: { name: 'Nueva Zelanda', numbers: [{ label: 'Emergencias', value: '111' }] },
+  PH: { name: 'Filipinas', numbers: [{ label: 'Emergencias', value: '911' }] },
+  CN: { name: 'China', numbers: [{ label: 'Policía', value: '110' }, { label: 'Ambulancia', value: '120' }, { label: 'Bomberos', value: '119' }] },
+  _default: { name: 'Internacional', numbers: [{ label: 'Emergencias (estándar UE/global)', value: '112' }] }
+};
+
 // ── State ──
 let mapInstance = null;
 let riskMarkers = [];
@@ -1417,6 +1587,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Cargar historial 2 años por zona
   setTimeout(() => loadHistoricalByZone(), 6000);
+
+  // Reactivar proximidad si el usuario ya la había activado antes
+  if (localStorage.getItem('seismosense_proximity') === 'granted') {
+    setTimeout(() => startProximityWatch(), 2000);
+  }
 });
 
 function updateClock() {
@@ -1434,7 +1609,6 @@ function initMap() {
     attributionControl: false
   });
 
-  // Intentar CartoDB Positron (claro), con fallback a OSM si falla
   const cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     maxZoom: 18,
     subdomains: 'abcd',
@@ -1448,7 +1622,6 @@ function initMap() {
     attribution: '© OpenStreetMap'
   });
 
-  // Intentar CartoDB, si falla usar OSM
   cartoLayer.on('tileerror', () => {
     if (mapInstance.hasLayer(cartoLayer)) {
       mapInstance.removeLayer(cartoLayer);
@@ -1458,7 +1631,6 @@ function initMap() {
 
   cartoLayer.addTo(mapInstance);
 
-  // Fallback proactivo: si en 4 segundos no cargó ningún tile, cambiar a OSM
   setTimeout(() => {
     const tiles = document.querySelectorAll('.leaflet-tile-loaded');
     if (tiles.length === 0) {
@@ -1472,25 +1644,15 @@ function initMap() {
 
 function drawFaultLines() {
   const faults = [
-    // San Andreas
     { coords: [[32.5,-117],[34.5,-118.5],[36,-120],[38,-122],[40,-124]], color: '#e74c3c', name: 'San Andrés' },
-    // Cascadia
     { coords: [[40,-125],[45,-124.5],[50,-127]], color: '#9b59b6', name: 'Cascadia' },
-    // Andes / Romeral
     { coords: [[-5,-77],[-1,-76],[4,-76],[8,-76],[11,-73]], color: '#e67e22', name: 'Sistema Andes' },
-    // Boconó / Oca Venezuela
     { coords: [[8,-73],[9,-70],[10.5,-67],[11,-65]], color: '#e74c3c', name: 'Oca-Boconó' },
-    // East Anatolian
     { coords: [[36,28],[37,32],[37.5,37],[38,40],[38.5,44]], color: '#f39c12', name: 'Anatolia' },
-    // Sumatra
     { coords: [[5,95],[0,103],[-6,106],[-10,110]], color: '#e74c3c', name: 'Sunda' },
-    // Japan
     { coords: [[30,131],[34,137],[36,141],[40,143]], color: '#f39c12', name: 'Nankai' },
-    // Himalayas
     { coords: [[28,72],[28,80],[28,88],[27,95]], color: '#e67e22', name: 'Himalaya' },
-    // Chile subduction
     { coords: [[-18,-70],[-22,-70],[-28,-70],[-34,-72],[-40,-73]], color: '#9b59b6', name: 'Nazca' },
-    // Zagros
     { coords: [[29,50],[32,49],[35,47],[37,45]], color: '#f39c12', name: 'Zagros' },
   ];
 
@@ -1508,11 +1670,8 @@ function drawFaultLines() {
 
 // ══════════════════════════════════════════════════════════
 //  MOTOR MULTIFUENTE — Cascada por velocidad
-//  Prioridad: USGS → EMSC → INGV → SGC
-//  Timeout 8s por fuente — nunca bloquea
 // ══════════════════════════════════════════════════════════
 
-// Estado de fuentes
 const SOURCE_STATUS = {
   usgs:  { name: 'USGS',  active: false, lastOk: null, events: 0 },
   emsc:  { name: 'EMSC',  active: false, lastOk: null, events: 0 },
@@ -1520,7 +1679,6 @@ const SOURCE_STATUS = {
   sgc:   { name: 'SGC',   active: false, lastOk: null, events: 0 },
 };
 
-// Pool global de eventos deduplicados por id/coords+tiempo
 let eventPool = new Map();
 
 async function fetchWithTimeout(url, ms = 8000) {
@@ -1536,7 +1694,6 @@ async function fetchWithTimeout(url, ms = 8000) {
   }
 }
 
-// ── Normalizar evento a formato común ──
 function normalizeEvent(raw, source) {
   try {
     if (source === 'usgs' || source === 'emsc') {
@@ -1558,7 +1715,6 @@ function normalizeEvent(raw, source) {
       };
     }
     if (source === 'ingv') {
-      // INGV retorna GeoJSON estándar compatible
       const p = raw.properties;
       const c = raw.geometry?.coordinates;
       if (!c) return null;
@@ -1580,9 +1736,7 @@ function normalizeEvent(raw, source) {
   return null;
 }
 
-// ── Clave de deduplicación ──
 function dedupKey(ev) {
-  // Dos eventos son el mismo si están a <50km y <60s de diferencia
   return `${(ev.lat/0.5).toFixed(0)}_${(ev.lng/0.5).toFixed(0)}_${Math.floor(ev.time/60000)}`;
 }
 
@@ -1603,7 +1757,6 @@ function mergeIntoPool(events, source) {
   console.log(`[SeismoSense] ${source.toUpperCase()} +${added} eventos (pool: ${eventPool.size})`);
 }
 
-// ── USGS (más rápido, cobertura global) ──
 async function fetchUSGS() {
   const feeds = [
     'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson',
@@ -1626,15 +1779,12 @@ async function fetchUSGS() {
   return false;
 }
 
-// ── EMSC (Europa, Mediterráneo, complementa USGS) ──
 async function fetchEMSC() {
-  // EMSC FDSN event service — retorna GeoJSON
   const url = 'https://www.seismicportal.eu/fdsnws/event/1/query?format=json&limit=200&minmag=2.5&orderby=time';
   try {
     const res = await fetchWithTimeout(url, 8000);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    // EMSC retorna features en data.features
     const features = data.features || [];
     if (features.length > 0) {
       mergeIntoPool(features, 'emsc');
@@ -1647,7 +1797,6 @@ async function fetchEMSC() {
   return false;
 }
 
-// ── INGV Italia ──
 async function fetchINGV() {
   const url = 'https://webservices.ingv.it/fdsnws/event/1/query?format=geojson&limit=100&minmag=2.0&orderby=time';
   try {
@@ -1666,9 +1815,7 @@ async function fetchINGV() {
   return false;
 }
 
-// ── SGC Colombia — sin API pública directa, usamos proxy USGS filtrado ──
 async function fetchSGC() {
-  // SGC no tiene CORS abierto, usamos USGS filtrado por bounding box Colombia
   const url = 'https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minmag=1.5&minlatitude=-5&maxlatitude=13&minlongitude=-80&maxlongitude=-65&orderby=time&limit=200';
   try {
     const res = await fetchWithTimeout(url, 8000);
@@ -1676,7 +1823,6 @@ async function fetchSGC() {
     const data = await res.json();
     const features = data.features || [];
     if (features.length > 0) {
-      // Tag como SGC para distinguir
       features.forEach(f => { if (f.properties) f.properties._sgc = true; });
       mergeIntoPool(features, 'sgc');
       return true;
@@ -1688,9 +1834,7 @@ async function fetchSGC() {
   return false;
 }
 
-// ── Orquestador principal — lanza todas en paralelo, no espera las lentas ──
 async function loadAllSources() {
-  // Lanzar todas simultáneamente — cada una tiene su propio timeout
   const results = await Promise.allSettled([
     fetchUSGS(),
     fetchEMSC(),
@@ -1701,7 +1845,6 @@ async function loadAllSources() {
   const anyOk = results.some(r => r.value === true);
 
   if (anyOk || eventPool.size > 0) {
-    // Convertir pool a array para compatibilidad con el resto del código
     earthquakeData = Array.from(eventPool.values()).map(ev => ({
       id: ev.id,
       properties: {
@@ -1722,6 +1865,9 @@ async function loadAllSources() {
     updateTechPanel();
     updateSourceIndicator();
 
+    // Chequeo de proximidad cada vez que llegan datos nuevos
+    checkProximityAlerts();
+
     console.log(`[SeismoSense] Pool total: ${earthquakeData.length} eventos de ${
       Object.values(SOURCE_STATUS).filter(s => s.active).map(s => s.name).join('+')
     }`);
@@ -1734,14 +1880,11 @@ function updateSourceIndicator() {
   if (badge) {
     badge.title = `Fuentes activas: ${active.join(', ')}`;
   }
-  // Actualizar panel técnico si existe
   const srcEl = document.getElementById('activeSources');
   if (srcEl) srcEl.textContent = active.join(' · ') || 'Ninguna';
 }
 
-// ── Historial por zona (2 años, USGS FDSNWS) ──
-// Se carga una vez al inicio, en paralelo, sin bloquear
-let historicalByZone = {}; // id -> array de eventos
+let historicalByZone = {};
 
 async function loadHistoricalByZone() {
   const endDate = new Date().toISOString().split('T')[0];
@@ -1766,10 +1909,8 @@ async function loadHistoricalByZone() {
     }
   });
 
-  // Lanzar todas en paralelo — cada una con su propio timeout
   await Promise.allSettled(promises);
 
-  // Recalcular modelos con historial real
   if (earthquakeData.length > 0) {
     computeRiskModels();
     renderRiskList();
@@ -1786,8 +1927,6 @@ function setLoadingText(t) {
 }
 async function loadUSGSData() { return loadAllSources(); }
 
-// ── Fetch específico para zonas con alerta activa ──
-// Trae todos los eventos M2.0+ de los últimos 10 días en el bbox exacto
 async function fetchActiveZones() {
   const alertZones = RISK_ZONES.filter(z => z.alert);
   console.log(`[ALERT ZONE] Iniciando fetch para ${alertZones.length} zonas activas`);
@@ -1799,13 +1938,11 @@ async function fetchActiveZones() {
       + `&minlatitude=${b.minLat}&maxlatitude=${b.maxLat}`
       + `&minlongitude=${b.minLng}&maxlongitude=${b.maxLng}`
       + `&minmagnitude=2.0&orderby=time&limit=1000`;
-    console.log(`[ALERT ZONE] Consultando ${zone.name}: ${url.substring(0,80)}...`);
     try {
       const res = await fetchWithTimeout(url, 12000);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const features = data.features || [];
-      console.log(`[ALERT ZONE] ${zone.name}: ${features.length} eventos recibidos`);
       if (features.length > 0) {
         mergeIntoPool(features, 'usgs');
         earthquakeData = Array.from(eventPool.values()).map(ev => ({
@@ -1817,15 +1954,244 @@ async function fetchActiveZones() {
         renderRiskList();
         renderMap();
         updateGlobalStats();
-        // Diagnóstico post-actualización
-        const vzla = riskZonesComputed.find(z => z.id === 'yaracuy-venezuela');
-        console.log(`[ALERT ZONE POST] Venezuela: prob=${(vzla?.probability*100).toFixed(1)}%, nearby30d=${vzla?.nearbyCount}, rank=${riskZonesComputed.indexOf(vzla)+1}`);
       }
     } catch(e) {
       console.warn(`[ALERT ZONE] ${zone.name} falló:`, e.message);
     }
   });
   await Promise.allSettled(promises);
+}
+
+// ══════════════════════════════════════════════════════════
+//  CAPA DE PROXIMIDAD GPS — Alertas cerca de tu ubicación real
+//  Independiente del modelo estadístico de zonas
+// ══════════════════════════════════════════════════════════
+
+let userLocation = null; // { lat, lng }
+let proximityWatchId = null;
+let alertedEventIds = new Set(); // evitar re-alertar el mismo sismo
+
+// Umbrales escalonados: mientras más cerca, menor magnitud dispara alerta
+const PROXIMITY_TIERS = [
+  { maxDist: 50,  minMag: 3.0 },
+  { maxDist: 150, minMag: 4.0 },
+  { maxDist: 300, minMag: 5.0 },
+  { maxDist: 700, minMag: 6.0 },
+];
+
+function requestProximityAlerts() {
+  if (!('geolocation' in navigator)) {
+    showToast('Tu navegador no soporta geolocalización.', 'error');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      localStorage.setItem('seismosense_proximity', 'granted');
+      localStorage.setItem('seismosense_user_lat', userLocation.lat);
+      localStorage.setItem('seismosense_user_lng', userLocation.lng);
+
+      const gpsStatus = document.getElementById('gpsStatus');
+      if (gpsStatus) { gpsStatus.textContent = '● Activo'; gpsStatus.className = 'tech-val ok'; }
+
+      showToast('📍 <strong>Alertas de proximidad activadas</strong><br><span style="color:#6b84a8;font-size:10px;">Te avisaremos de sismos reales cerca de tu ubicación</span>', 'success');
+
+      startProximityWatch();
+      checkProximityAlerts();
+    },
+    err => {
+      showToast('No se pudo obtener tu ubicación: ' + err.message, 'error');
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
+  );
+}
+
+function startProximityWatch() {
+  // Recuperar ubicación guardada si existe
+  const savedLat = localStorage.getItem('seismosense_user_lat');
+  const savedLng = localStorage.getItem('seismosense_user_lng');
+  if (savedLat && savedLng) {
+    userLocation = { lat: parseFloat(savedLat), lng: parseFloat(savedLng) };
+    const gpsStatus = document.getElementById('gpsStatus');
+    if (gpsStatus) { gpsStatus.textContent = '● Activo'; gpsStatus.className = 'tech-val ok'; }
+  }
+
+  // Actualizar ubicación cada 10 minutos (sin ser invasivo con la batería)
+  if (proximityWatchId) clearInterval(proximityWatchId);
+  proximityWatchId = setInterval(() => {
+    if (!('geolocation' in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      pos => { userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
+      () => {},
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
+    );
+  }, 600000);
+}
+
+function checkProximityAlerts() {
+  if (!userLocation || earthquakeData.length === 0) return;
+
+  const now = Date.now();
+  const recentWindow = 30 * 60 * 1000; // últimos 30 minutos — evento "reciente" real
+
+  earthquakeData.forEach(eq => {
+    if (alertedEventIds.has(eq.id)) return;
+    if ((now - eq.properties.time) > recentWindow) return;
+
+    const [lng, lat] = eq.geometry.coordinates;
+    const dist = haversine(lat, lng, userLocation.lat, userLocation.lng);
+    const mag = eq.properties.mag || 0;
+
+    // Buscar el tier correspondiente a esta distancia
+    const tier = PROXIMITY_TIERS.find(t => dist <= t.maxDist);
+    if (!tier) return; // fuera de todos los radios de interés
+    if (mag < tier.minMag) return; // no alcanza el umbral para esa distancia
+
+    // ¡Alerta de proximidad real!
+    alertedEventIds.add(eq.id);
+    triggerProximityAlert(eq, dist);
+  });
+}
+
+function triggerProximityAlert(eq, distKm) {
+  const mag = eq.properties.mag.toFixed(1);
+  const place = eq.properties.place || 'Ubicación desconocida';
+
+  // Mostrar banner en UI
+  const banner = document.getElementById('proximityBanner');
+  const text = document.getElementById('proximityText');
+  if (banner && text) {
+    text.textContent = `M${mag} — ${place} · a ${distKm.toFixed(0)} km de tu ubicación`;
+    banner.classList.add('visible');
+  }
+
+  // Vibración (sobrevive modo silencio en la mayoría de dispositivos)
+  if ('vibrate' in navigator) {
+    navigator.vibrate([300, 100, 300, 100, 300, 100, 600]);
+  }
+
+  // Sirena — mejor esfuerzo, funciona si la pestaña está en foreground
+  playSiren();
+
+  // Notificación del sistema si hay permiso
+  if ('Notification' in window && Notification.permission === 'granted') {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.showNotification(`📍 Sismo cerca de ti — M${mag}`, {
+          body: `${place} · a ${distKm.toFixed(0)} km`,
+          icon: '/icons/icon-192.png',
+          badge: '/icons/badge-96.png',
+          tag: `proximity-${eq.id}`,
+          requireInteraction: true,
+          vibrate: [300, 100, 300, 100, 300, 100, 600],
+          data: { url: '/?tab=events' }
+        });
+      });
+    }
+  }
+
+  console.log(`[PROXIMITY] Alerta disparada: M${mag} a ${distKm.toFixed(0)}km`);
+}
+
+// ── Sirena sintetizada con Web Audio API ──
+// Mejor esfuerzo: funciona con la pestaña abierta. En iOS, el switch físico
+// de silencio puede silenciar el audio web — es una limitación de la plataforma.
+let audioCtx = null;
+
+function playSiren() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const duration = 3; // segundos
+    const startTime = audioCtx.currentTime;
+
+    for (let cycle = 0; cycle < 3; cycle++) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const cycleStart = startTime + cycle * 1.0;
+      osc.frequency.setValueAtTime(600, cycleStart);
+      osc.frequency.linearRampToValueAtTime(1200, cycleStart + 0.5);
+      osc.frequency.linearRampToValueAtTime(600, cycleStart + 1.0);
+
+      gain.gain.setValueAtTime(0.3, cycleStart);
+      gain.gain.linearRampToValueAtTime(0.3, cycleStart + 0.9);
+      gain.gain.linearRampToValueAtTime(0, cycleStart + 1.0);
+
+      osc.start(cycleStart);
+      osc.stop(cycleStart + 1.0);
+    }
+  } catch(e) {
+    console.warn('[Siren] No se pudo reproducir:', e.message);
+  }
+}
+
+// ── Emergencias por país ──
+async function openEmergencyModal() {
+  const modal = document.getElementById('emergencyModal');
+  const countryEl = document.getElementById('emergencyCountry');
+  const numbersEl = document.getElementById('emergencyNumbers');
+
+  modal.classList.add('open');
+  countryEl.textContent = 'Detectando tu ubicación...';
+  numbersEl.innerHTML = '';
+
+  let lat, lng;
+
+  if (userLocation) {
+    lat = userLocation.lat; lng = userLocation.lng;
+  } else if ('geolocation' in navigator) {
+    try {
+      const pos = await new Promise((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 })
+      );
+      lat = pos.coords.latitude; lng = pos.coords.longitude;
+      userLocation = { lat, lng };
+    } catch(e) {
+      renderEmergencyDefault();
+      return;
+    }
+  } else {
+    renderEmergencyDefault();
+    return;
+  }
+
+  try {
+    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=es`);
+    const data = await res.json();
+    const code = data.countryCode;
+    const info = EMERGENCY_NUMBERS[code] || EMERGENCY_NUMBERS._default;
+
+    countryEl.textContent = `${data.countryName || info.name}`;
+    renderEmergencyNumbers(info.numbers);
+  } catch(e) {
+    console.warn('[Emergency] Reverse geocode falló:', e.message);
+    renderEmergencyDefault();
+  }
+}
+
+function renderEmergencyDefault() {
+  document.getElementById('emergencyCountry').textContent = 'No se pudo detectar tu país — números internacionales:';
+  renderEmergencyNumbers(EMERGENCY_NUMBERS._default.numbers);
+}
+
+function renderEmergencyNumbers(numbers) {
+  const el = document.getElementById('emergencyNumbers');
+  el.innerHTML = numbers.map(n => `
+    <a href="tel:${n.value}" class="emergency-num-btn">
+      <span class="emergency-num-label">${n.label}</span>
+      <span class="emergency-num-value">${n.value}</span>
+    </a>
+  `).join('');
+}
+
+function closeEmergencyModal() {
+  document.getElementById('emergencyModal').classList.remove('open');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1837,38 +2203,25 @@ function computeRiskModels() {
   const DAY = 86400000;
   const WEEK = 7 * DAY;
 
-  // Parámetros ETAS calibrados (Ogata 1988, valores estándar sismología)
-  const ETAS_K  = 0.008;   // Productividad base
-  const ETAS_p  = 1.12;    // Decaimiento temporal (Omori-Utsu)
-  const ETAS_c  = 0.05;    // Tiempo mínimo (días)
-  const ETAS_alpha = 0.46; // Sensibilidad a magnitud
+  const ETAS_K  = 0.008;
+  const ETAS_p  = 1.12;
+  const ETAS_c  = 0.05;
+  const ETAS_alpha = 0.46;
 
   riskZonesComputed = RISK_ZONES.map(zone => {
     const radio = zone.radioKm || 300;
 
-    // ── 1. Eventos cercanos usando radio propio de cada zona ──
     const nearby30d = earthquakeData.filter(eq => {
       const [lng, lat] = eq.geometry.coordinates;
       return haversine(lat, lng, zone.lat, zone.lng) < radio &&
              (now - eq.properties.time) < 30 * DAY;
     });
 
-    // Diagnóstico temporal Venezuela
-    if (zone.id === 'yaracuy-venezuela') {
-      console.log(`[DIAG Venezuela] Pool total: ${earthquakeData.length}, nearby30d: ${nearby30d.length}, radio: ${radio}km`);
-      const m5 = nearby30d.filter(e => (e.properties.mag||0) >= 5.0);
-      console.log(`[DIAG Venezuela] M5+: ${m5.length}`, m5.map(e => `M${e.properties.mag} ${new Date(e.properties.time).toLocaleDateString()}`));
-    }
-
     const nearby7d = nearby30d.filter(eq => (now - eq.properties.time) < WEEK);
     const nearby24h = nearby30d.filter(eq => (now - eq.properties.time) < DAY);
 
-    // Historial 2 años para b-value confiable
     const historical = historicalByZone[zone.id] || [];
 
-    // ── 2. ETAS — Omori-Utsu con decaimiento real ──
-    // Contribución de cada evento: K * 10^(α*M) / (t+c)^p
-    // Normalizado para que no explote con muchos eventos
     let etasRate = 0;
     nearby30d.forEach(eq => {
       const mag = eq.properties.mag || 2.5;
@@ -1876,26 +2229,18 @@ function computeRiskModels() {
       etasRate += ETAS_K * Math.pow(10, ETAS_alpha * (mag - 4.0)) / Math.pow(tDays + ETAS_c, ETAS_p);
     });
 
-    // Convertir tasa ETAS a probabilidad via Poisson: P = 1 - e^(-rate)
     const etasProb = 1 - Math.exp(-Math.min(etasRate, 5));
 
-    // ── 3. Gutenberg-Richter — b-value con historial real 2 años ──
-    // Si tenemos historial, úsalo; si no, fallback a 30 días
     const bSource = historical.length >= 30 ? historical : nearby30d;
     const bValue = computeBValue(bSource, zone.bValue);
-    // b bajo = zona acumula estrés (menos sismos pequeños = falla bloqueada)
-    // Referencia: b normal ~1.0, b bajo (<0.7) = alta tensión
     const bNormal = 1.0;
-    const bDeviation = Math.max(0, bNormal - bValue); // positivo = más peligroso
+    const bDeviation = Math.max(0, bNormal - bValue);
     const grContrib = Math.min(0.25, bDeviation * 0.5);
 
-    // ── 4. Deuda sísmica — energía acumulada vs tasa histórica ──
-    // Años desde último evento mayor × tasa histórica = energía pendiente
     const seismicDebt = zone.deuda
       ? Math.min(0.20, (zone.yearsSinceLastMajor || 25) / 200)
       : 0;
 
-    // ── 5. Transferencia de Coulomb — boost post-evento M6+ cercano ──
     const bigRecent = earthquakeData.filter(eq => {
       const [lng, lat] = eq.geometry.coordinates;
       const mag = eq.properties.mag || 0;
@@ -1912,30 +2257,21 @@ function computeRiskModels() {
         zone.lat, zone.lng
       );
       const tDays = Math.max(0.1, (now - eq.properties.time) / DAY);
-      // ΔCFS disminuye con distancia y tiempo
       coulombContrib += (mag - 5.5) * 0.04 * (1 / (dist / 200 + 1)) * (1 / (tDays / 7 + 1));
     });
     coulombContrib = Math.min(0.25, coulombContrib);
 
-    // ── 6. Anomalía de clustering 24h ──
-    // Si hay muchos sismos en las últimas 24h vs promedio semanal
     const rate24h = nearby24h.length;
     const rateAvg = nearby7d.length / 7;
     const clusterAnomaly = rateAvg > 0
       ? Math.min(0.15, Math.max(0, (rate24h / rateAvg - 1.5) * 0.05))
       : 0;
 
-    // ── 7. Combinar todos los componentes con pesos normalizados ──
-    // Lógica: si hay actividad reciente, ETAS domina.
-    // Si no hay actividad, deuda sísmica + G-R toman el control.
-    // Nunca dejar que baseRisk solo lleve a zona crítica.
-
     const hasRecentActivity = nearby7d.length > 0;
     const hasSignificantEvent = nearby7d.some(e => (e.properties.mag || 0) >= 5.0);
 
     let rawProb;
     if (hasSignificantEvent) {
-      // Evento M5+ reciente: ETAS lidera fuertemente
       rawProb = etasProb * 0.60
         + zone.baseRisk * 0.15
         + grContrib * 0.08
@@ -1943,7 +2279,6 @@ function computeRiskModels() {
         + coulombContrib * 0.07
         + clusterAnomaly * 0.02;
     } else if (hasRecentActivity) {
-      // Actividad menor: balance ETAS + geología
       rawProb = etasProb * 0.35
         + zone.baseRisk * 0.20
         + grContrib * 0.18
@@ -1951,7 +2286,6 @@ function computeRiskModels() {
         + coulombContrib * 0.10
         + clusterAnomaly * 0.02;
     } else {
-      // Sin actividad reciente: deuda y geología dominan, cap a 0.65
       rawProb = Math.min(0.65,
         zone.baseRisk * 0.30
         + grContrib * 0.28
@@ -1960,13 +2294,10 @@ function computeRiskModels() {
       );
     }
 
-    // Boost explícito para zonas con alerta activa (evento reciente real)
     if (zone.alert) rawProb = Math.min(0.92, rawProb + 0.28);
 
-    // Limitar a rango útil [0.05, 0.92]
     const probability = Math.max(0.05, Math.min(0.92, rawProb));
 
-    // ── 8. Tendencia — comparar con ciclo anterior ──
     const prevProb = zone._prevProbability || probability;
     const trend = probability > prevProb + 0.03 ? 'up'
       : probability < prevProb - 0.03 ? 'down' : 'stable';
@@ -1992,8 +2323,6 @@ function computeRiskModels() {
     };
   });
 
-  // Normalización suave — evitar que todo se apile en extremo
-  // Si más de 60% de zonas están en crítico/extremo, recalibrar
   const highCount = riskZonesComputed.filter(z => z.probability > 0.65).length;
   if (highCount > riskZonesComputed.length * 0.5) {
     const factor = 0.85;
@@ -2021,7 +2350,6 @@ function computeBValue(events, fallback) {
   if (mags.length < 5) return fallback;
   const meanM = mags.reduce((a,b) => a+b, 0) / mags.length;
   const Mmin = 2.5;
-  // Maximum likelihood: b = log10(e) / (mean(M) - Mmin)
   const b = Math.log10(Math.E) / (meanM - Mmin);
   return Math.max(0.5, Math.min(1.5, b));
 }
@@ -2058,7 +2386,6 @@ function renderRiskList() {
   const el = document.getElementById('riskList');
   el.innerHTML = '';
 
-  // Alert banner
   const criticals = riskZonesComputed.filter(z => z.isAlert);
   const banner = document.getElementById('alertBanner');
   if (criticals.length > 0) {
@@ -2183,7 +2510,6 @@ function updateTechPanel() {
 
   document.getElementById('techEventCount').textContent = earthquakeData.length;
 
-  // Find latest M6+ for CFS
   const big = earthquakeData
     .filter(e => (e.properties.mag || 0) >= 6)
     .sort((a,b) => b.properties.time - a.properties.time)[0];
@@ -2197,7 +2523,6 @@ function updateTechPanel() {
 
   drawGRChart();
 
-  // Re-sort back
   riskZonesComputed.sort((a, b) => b.probability - a.probability);
 }
 
@@ -2208,7 +2533,6 @@ function drawGRChart() {
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
 
-  // Count events by magnitude bin
   const bins = [2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0];
   const counts = bins.map((m, i) => {
     const nextM = bins[i+1] || 99;
@@ -2221,7 +2545,6 @@ function drawGRChart() {
   const maxCount = Math.max(...counts) || 1;
   const barW = W / bins.length - 3;
 
-  // Draw G-R theoretical line
   const b = 0.9;
   ctx.beginPath();
   ctx.strokeStyle = '#3d8bff';
@@ -2238,7 +2561,6 @@ function drawGRChart() {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Draw actual bars
   counts.forEach((count, i) => {
     const x = i * (W / bins.length) + 2;
     const barH = count > 0 ? (Math.log10(count + 1) / Math.log10(maxCount + 1)) * (H - 6) : 0;
@@ -2251,7 +2573,6 @@ function drawGRChart() {
     ctx.strokeRect(x, H - barH - 2, barW, barH);
   });
 
-  // Labels
   ctx.fillStyle = '#6b84a8';
   ctx.font = '8px Space Mono, monospace';
   bins.forEach((m, i) => {
@@ -2261,7 +2582,6 @@ function drawGRChart() {
 
 // ── Map rendering ──
 function renderMap() {
-  // Clear existing markers
   riskMarkers.forEach(m => mapInstance.removeLayer(m));
   eqMarkers.forEach(m => mapInstance.removeLayer(m));
   riskMarkers = [];
@@ -2278,8 +2598,6 @@ function renderRiskMap() {
     const color = getRiskColor(zone.riskLevel);
     const pct = zone.probability;
 
-    // Polígono elíptico que representa el área de influencia geológica real
-    // Cada zona tiene su propio tamaño y orientación según la falla
     const polygon = buildZonePolygon(zone);
 
     const layer = L.polygon(polygon, {
@@ -2290,7 +2608,6 @@ function renderRiskMap() {
       opacity: 0.85
     }).addTo(mapInstance);
 
-    // Label compacto sobre la zona
     const center = getPolygonCenter(polygon);
     const label = L.divIcon({
       html: `<div style="
@@ -2323,9 +2640,21 @@ function renderRiskMap() {
 
     riskMarkers.push(layer, labelMarker);
   });
+
+  // Marcador de la ubicación del usuario si tiene proximidad activada
+  if (userLocation) {
+    const userMarker = L.circleMarker([userLocation.lat, userLocation.lng], {
+      radius: 8,
+      fillColor: '#3d8bff',
+      fillOpacity: 0.9,
+      color: '#fff',
+      weight: 2
+    }).addTo(mapInstance);
+    userMarker.bindTooltip('📍 Tu ubicación', { className: 'tooltip-custom', direction: 'top' });
+    riskMarkers.push(userMarker);
+  }
 }
 
-// Genera un polígono elíptico para cada zona según su tamaño geológico real
 function buildZonePolygon(zone) {
   const extents = {
     'eje-cafetero':         { latR: 1.2, lngR: 1.5, angle: 30 },
@@ -2350,7 +2679,6 @@ function buildZonePolygon(zone) {
 
   for (let i = 0; i < steps; i++) {
     const t = (2 * Math.PI * i) / steps;
-    // Elipse rotada
     const x = e.lngR * Math.cos(t);
     const y = e.latR * Math.sin(t);
     const rotX = x * Math.cos(angleRad) - y * Math.sin(angleRad);
@@ -2421,7 +2749,6 @@ function showZoneDetail(zone) {
   document.getElementById('detailDesc').textContent =
     `${zone.recentCount} eventos en radio 300km (7 días). b-value: ${zone.computedBValue.toFixed(2)}. ${zone.deuda ? 'Deuda sísmica detectada.' : 'Sin deuda sísmica significativa.'} `;
 
-  // Models
   const etasVal = Math.min(95, Math.round(zone.probability * 100 * 0.9 + 5));
   const grVal = Math.min(95, Math.round(zone.probability * 100 * 0.85 + 8));
   const cfVal = Math.min(95, Math.round(zone.probability * 100 * 0.95 - 3));
@@ -2441,14 +2768,12 @@ function showZoneDetail(zone) {
     </div>
   `;
 
-  // Faults
   const faultHTML = zone.faults.map(f => {
     const isActive = zone.activeFaults?.includes(f);
     return `<span class="fault-tag ${isActive ? 'active' : ''}">${f}</span>`;
   }).join('');
   document.getElementById('detailFaults').innerHTML = faultHTML;
 
-  // History
   document.getElementById('detailHistory').innerHTML = `
     <div class="history-card">
       <div class="history-title">${zone.historyTitle}</div>
@@ -2458,7 +2783,6 @@ function showZoneDetail(zone) {
 
   overlay.classList.add('open');
 
-  // Fly to zone on map
   mapInstance.setView([zone.lat, zone.lng], 5, { animate: true, duration: 1 });
 }
 
@@ -2476,7 +2800,6 @@ function switchTab(tab) {
 
 // ── Fallback data ──
 function useFallbackData() {
-  // Sample recent real events as fallback (so app never shows empty)
   const now = Date.now();
   earthquakeData = [
     { id:'fallback1', properties:{ mag:7.5, place:'16 km SO de Morón, Carabobo, Venezuela', time: now - 3*86400000, url:'' }, geometry:{ coordinates:[-68.3, 10.4, 10] } },
@@ -2555,7 +2878,6 @@ if ('serviceWorker' in navigator) {
       const reg = await navigator.serviceWorker.register('/sw.js');
       console.log('[PWA] Service Worker registrado:', reg.scope);
       
-      // Check for updates
       reg.addEventListener('updatefound', () => {
         const newWorker = reg.installing;
         newWorker.addEventListener('statechange', () => {
@@ -2570,7 +2892,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ── Install prompt ──
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
@@ -2598,7 +2919,6 @@ function dismissInstall() {
   if (bar) bar.style.display = 'none';
 }
 
-// ── Notifications ──
 // ══════════════════════════════════════════════════════
 //  PUSH NOTIFICATIONS — Firebase FCM + Web Push VAPID
 // ══════════════════════════════════════════════════════
@@ -2637,7 +2957,6 @@ async function requestNotifications() {
   }
 
   try {
-    // 1. Pedir permiso al usuario
     const permission = await Notification.requestPermission();
 
     if (permission === 'denied') {
@@ -2650,10 +2969,8 @@ async function requestNotifications() {
 
     if (permission !== 'granted') return;
 
-    // 2. Obtener registro del Service Worker
     const reg = await navigator.serviceWorker.ready;
 
-    // 3. Suscribir al Web Push con VAPID
     let subscription = await reg.pushManager.getSubscription();
 
     if (!subscription) {
@@ -2665,9 +2982,7 @@ async function requestNotifications() {
 
     console.log('[Push] Suscripción obtenida:', subscription.endpoint.substring(0, 60) + '...');
 
-    // 4. Suscribir al topic FCM via servidor
     try {
-      // Primero registrar el token FCM
       const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
       const { getMessaging, getToken, onMessage } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js');
 
@@ -2686,7 +3001,6 @@ async function requestNotifications() {
         console.log('[FCM] Token obtenido:', fcmToken.substring(0, 30) + '...');
         localStorage.setItem('seismosense_fcm_token', fcmToken);
 
-        // Guardar token en servidor para envío de notificaciones
         await fetch('/api/subscribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2699,25 +3013,23 @@ async function requestNotifications() {
           })
         }).catch(e => console.warn('[FCM] No se pudo guardar token:', e.message));
 
-        // Escuchar mensajes cuando la app está abierta
         onMessage(messaging, payload => {
           console.log('[FCM] Mensaje recibido en foreground:', payload);
           const { title, body } = payload.notification || {};
           if (title) showToast(`🔔 ${title}<br><span style="font-size:10px;color:#6b84a8">${body}</span>`, 'info');
+          // Reproducir sirena también en notificaciones push del servidor
+          playSiren();
         });
       }
     } catch(fcmError) {
       console.warn('[FCM] Error al obtener token, usando Web Push básico:', fcmError.message);
     }
 
-    // 5. Guardar localmente
     localStorage.setItem('seismosense_notif', 'granted');
     localStorage.setItem('seismosense_sub_endpoint', subscription.endpoint.substring(0, 60));
 
-    // 6. Ocultar barra inmediatamente
     if (notifBar) notifBar.style.display = 'none';
 
-    // 7. Notificación de confirmación — una sola vez
     setTimeout(() => {
       reg.active?.postMessage({ type: 'TEST_NOTIFICATION' });
     }, 500);
@@ -2753,7 +3065,6 @@ function showNotifConfirm() {
   );
 }
 
-// ── Mostrar barra si no están activas ──
 window.addEventListener('DOMContentLoaded', () => {
   const notifBar = document.getElementById('notifBar');
   const stored = localStorage.getItem('seismosense_notif');
@@ -2763,7 +3074,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// ── Escuchar mensajes del SW ──
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', event => {
     if (event.data?.type === 'NAVIGATE') {
