@@ -1866,6 +1866,8 @@ async function loadAllSources() {
   const anyOk = results.some(r => r.value === true);
 
   if (anyOk || eventPool.size > 0) {
+    clearFallbackWarning();
+
     earthquakeData = Array.from(eventPool.values()).map(ev => ({
       id: ev.id,
       properties: {
@@ -2986,24 +2988,47 @@ function switchTab(tab) {
 }
 
 // ── Fallback data ──
+let usingFallbackData = false;
+
 function useFallbackData() {
-  const now = Date.now();
+  usingFallbackData = true;
+  // Fecha FIJA real del evento (24 jun 2026) — nunca se recalcula como "ahora"
+  const eventTime = new Date('2026-06-24T07:39:00Z').getTime();
+
   earthquakeData = [
-    { id:'fallback1', properties:{ mag:7.5, place:'16 km SO de Morón, Carabobo, Venezuela', time: now - 3*86400000, url:'' }, geometry:{ coordinates:[-68.3, 10.4, 10] } },
-    { id:'fallback2', properties:{ mag:7.2, place:'23 km de San Felipe, Yaracuy, Venezuela', time: now - 3*86400000 - 39000, url:'' }, geometry:{ coordinates:[-68.7, 10.5, 20] } },
-    { id:'fallback3', properties:{ mag:5.5, place:'Norte de Venezuela', time: now - 3600000, url:'' }, geometry:{ coordinates:[-68.5, 10.6, 15] } },
-    { id:'fallback4', properties:{ mag:4.9, place:'Bucaramanga, Colombia', time: now - 7200000, url:'' }, geometry:{ coordinates:[-73.1, 7.1, 155] } },
-    { id:'fallback5', properties:{ mag:5.1, place:'Norte de Chile', time: now - 86400000, url:'' }, geometry:{ coordinates:[-69.5, -22.1, 45] } },
-    { id:'fallback6', properties:{ mag:4.8, place:'Sur de México', time: now - 43200000, url:'' }, geometry:{ coordinates:[-100.1, 17.4, 30] } },
-    { id:'fallback7', properties:{ mag:5.3, place:'Java, Indonesia', time: now - 21600000, url:'' }, geometry:{ coordinates:[107.1, -6.8, 55] } },
-    { id:'fallback8', properties:{ mag:4.6, place:'Turquía', time: now - 10800000, url:'' }, geometry:{ coordinates:[38.2, 37.6, 10] } },
+    { id:'fallback1', properties:{ mag:7.5, place:'[EJEMPLO — 24 jun 2026] 16 km SO de Morón, Carabobo, Venezuela', time: eventTime, url:'' }, geometry:{ coordinates:[-68.3, 10.4, 10] } },
+    { id:'fallback2', properties:{ mag:7.2, place:'[EJEMPLO — 24 jun 2026] 23 km de San Felipe, Yaracuy, Venezuela', time: eventTime - 39000, url:'' }, geometry:{ coordinates:[-68.7, 10.5, 20] } },
   ];
+
+  showFallbackWarning();
   computeRiskModels();
   renderRiskList();
   renderEventsList();
   renderMap();
   updateGlobalStats();
   updateTechPanel();
+}
+
+function showFallbackWarning() {
+  const banner = document.getElementById('alertBanner');
+  if (!banner) return;
+  banner.classList.add('visible');
+  banner.style.borderLeftColor = '#f39c12';
+  banner.style.background = 'rgba(243,156,18,0.08)';
+  const title = banner.querySelector('.alert-title');
+  const body = document.getElementById('alertText');
+  if (title) { title.textContent = '⚠ SIN CONEXIÓN A FUENTES EN VIVO'; title.style.color = '#f39c12'; }
+  if (body) body.textContent = 'No se pudieron cargar datos actuales de USGS/EMSC. Mostrando ejemplo histórico (24 jun 2026) mientras se reintenta la conexión.';
+}
+
+function clearFallbackWarning() {
+  if (!usingFallbackData) return;
+  usingFallbackData = false;
+  const banner = document.getElementById('alertBanner');
+  if (banner) {
+    banner.style.borderLeftColor = '';
+    banner.style.background = '';
+  }
 }
 </script>
 
