@@ -1,51 +1,26 @@
 // api/subscribe.js
-// Recibe token FCM y suscribe al topic earthquakes-global
+// Guarda token FCM + ubicación + preferencias del usuario en Upstash Redis
+// Esto permite que el servidor mande alertas personalizadas por ubicación
+// aunque la app esté completamente cerrada.
 
-async function getFirebaseAccessToken(serviceAccount) {
-  const now = Math.floor(Date.now() / 1000);
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-  const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
-    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-
-  const payload = btoa(JSON.stringify({
-    iss: serviceAccount.client_email,
-    scope: 'https://www.googleapis.com/auth/firebase.messaging',
-    aud: 'https://oauth2.googleapis.com/token',
-    exp: now + 3600,
-    iat: now
-  })).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-
-  const pemContents = serviceAccount.private_key
-    .replace(/-----BEGIN PRIVATE KEY-----/, '')
-    .replace(/-----END PRIVATE KEY-----/, '')
-    .replace(/\n/g, '');
-  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
-
-  const cryptoKey = await crypto.subtle.importKey(
-    'pkcs8', binaryKey.buffer,
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false, ['sign']
-  );
-
-  const signingInput = `${header}.${payload}`;
-  const signature = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5', cryptoKey,
-    new TextEncoder().encode(signingInput)
-  );
-
-  const sig = btoa(String.fromCharCode(...new Uint8Array(signature)))
-    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-
-  const jwt = `${signingInput}.${sig}`;
-
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+async function redisSet(key, value) {
+  const res = await fetch(`${UPSTASH_URL}/set/${encodeURIComponent(key)}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`
+    headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(value)
   });
+  return res.json();
+}
 
-  const data = await tokenRes.json();
-  return data.access_token;
+async function redisSadd(setKey, member) {
+  const res = await fetch(`${UPSTASH_URL}/sadd/${encodeURIComponent(setKey)}/${encodeURIComponent(member)}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
+  });
+  return res.json();
 }
 
 export default async function handler(req, res) {
@@ -57,71 +32,42 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { fcmToken, subscription, zone, lang } = req.body;
-
-    console.log('[Subscribe] Nueva suscripción recibida', {
-      hasFcmToken: !!fcmToken,
-      hasSubscription: !!subscription,
-      zone, lang
-    });
+    const { fcmToken, lat, lng, notifType, notifMinMag, lang } = req.body;
 
     if (!fcmToken) {
-      return res.status(400).json({ 
-        error: 'Se requiere fcmToken',
-        note: 'Sin token FCM no se puede suscribir al topic'
+      return res.status(400).json({ error: 'Se requiere fcmToken' });
+    }
+
+    if (!UPSTASH_URL || !UPSTASH_TOKEN) {
+      console.warn('[Subscribe] Upstash no configurado — guardando solo log');
+      console.log('[Subscribe] Nueva suscripción (sin persistencia):', { fcmToken: fcmToken.substring(0,20), lat, lng, notifType, notifMinMag });
+      return res.status(200).json({
+        success: true,
+        warning: 'Guardado sin persistencia — configura UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN para alertas server-side'
       });
     }
 
-    // Obtener service account
-    const serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (!serviceAccountStr) {
-      return res.status(500).json({ error: 'FIREBASE_SERVICE_ACCOUNT no configurado' });
-    }
+    // Guardar el perfil del suscriptor bajo su token
+    const key = `sub:${fcmToken}`;
+    const profile = {
+      fcmToken,
+      lat: lat ?? null,
+      lng: lng ?? null,
+      notifType: notifType || 'cercanos',
+      notifMinMag: notifMinMag || 'auto',
+      lang: lang || 'es',
+      updated: Date.now()
+    };
 
-    const serviceAccount = JSON.parse(serviceAccountStr);
-    const accessToken = await getFirebaseAccessToken(serviceAccount);
+    await redisSet(key, JSON.stringify(profile));
+    // Mantener un índice de todos los tokens registrados
+    await redisSadd('subscribers:all', fcmToken);
 
-    // Suscribir token al topic earthquakes-global
-    const topicRes = await fetch(
-      `https://iid.googleapis.com/iid/v1/${fcmToken}/rel/topics/earthquakes-global`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'access_token_auth': 'true'
-        }
-      }
-    );
-
-    const topicResult = await topicRes.json();
-    console.log('[Subscribe] Topic subscription result:', JSON.stringify(topicResult));
-
-    // Si falla con IID, intentar con batch subscribe
-    if (!topicRes.ok) {
-      console.log('[Subscribe] IID falló, intentando batch...');
-      const batchRes = await fetch(
-        'https://fcm.googleapis.com/fcm/send',
-        {
-          method: 'POST', 
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            registration_ids: [fcmToken],
-            condition: "'earthquakes-global' in topics"
-          })
-        }
-      );
-      console.log('[Subscribe] Batch result:', batchRes.status);
-    }
+    console.log(`[Subscribe] Guardado: ${fcmToken.substring(0,20)}... en (${lat}, ${lng}) tipo=${notifType}`);
 
     return res.status(200).json({
       success: true,
-      message: 'Suscrito al topic earthquakes-global',
-      topic: 'earthquakes-global',
-      timestamp: new Date().toISOString()
+      message: 'Suscripción guardada — recibirás alertas server-side por tu ubicación'
     });
 
   } catch (error) {
