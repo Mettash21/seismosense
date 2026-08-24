@@ -1230,6 +1230,15 @@ header {
       <button class="map-btn" id="btnSismos" onclick="setMapMode('sismos')">💥 Sismos</button>
       <button class="map-btn" id="btnFaults" onclick="setMapMode('faults')">🗺 Fallas</button>
       <button class="map-btn emergency" onclick="openEmergencyModal()">🚨 Emergencias</button>
+      <select id="mapDateFilter" onchange="setDateFilter(this.value)" style="
+        display:none;background:var(--panel);border:1px solid var(--border);
+        color:var(--text);padding:8px 10px;border-radius:6px;font-size:11px;
+        font-family:'Space Grotesk',sans-serif;font-weight:600;cursor:pointer;">
+        <option value="24h">🕐 Últimas 24h</option>
+        <option value="7d">📅 1 semana</option>
+        <option value="30d">📅 1 mes</option>
+        <option value="all">🌍 Todos</option>
+      </select>
     </div>
 
     <div class="map-legend">
@@ -2568,7 +2577,11 @@ function setDateFilter(range) {
   document.querySelectorAll('.date-filter-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.range === range);
   });
+  const mapSelect = document.getElementById('mapDateFilter');
+  if (mapSelect) mapSelect.value = range;
+
   renderEventsList();
+  if (mapMode === 'sismos') renderMap();
 }
 
 function formatEventDate(time) {
@@ -2934,16 +2947,18 @@ function getPolygonCenter(polygon) {
 }
 
 function renderEqMap() {
-  // TODOS los sismos cargados — circleMarker se renderiza en canvas (preferCanvas:true),
-  // mucho más liviano que crear un div por cada uno cuando son cientos/miles.
+  // Aplica el mismo filtro de fecha usado en la lista de Eventos
   const now = Date.now();
+  const windowMs = DATE_FILTER_WINDOWS[currentDateFilter] ?? Infinity;
+  const filtered = earthquakeData.filter(eq => (now - eq.properties.time) <= windowMs);
 
-  earthquakeData.forEach(eq => {
+  filtered.forEach(eq => {
     const [lng, lat, depth] = eq.geometry.coordinates;
     const mag = eq.properties.mag || 2.5;
     const color = mag >= 6 ? '#e74c3c' : mag >= 5 ? '#e67e22' : mag >= 4 ? '#f39c12' : '#2ecc71';
     const radius = Math.max(3, mag * 2.5);
     const isRecent = (now - eq.properties.time) < 24 * 3600 * 1000;
+    const fullDate = formatEventDate(eq.properties.time);
 
     const m = L.circleMarker([lat, lng], {
       radius,
@@ -2954,14 +2969,24 @@ function renderEqMap() {
       opacity: 0.9
     }).addTo(mapInstance);
 
+    // Hover: resumen rápido
     m.bindTooltip(
-      `M${mag.toFixed(1)} · ${eq.properties.place?.substring(0,40) || ''}<br>Prof: ${depth?.toFixed(0) || '?'}km`,
+      `M${mag.toFixed(1)} · ${eq.properties.place?.substring(0,40) || ''}`,
       { className: 'tooltip-custom', direction: 'top' }
     );
 
+    // Clic: fecha completa y detalle
+    m.bindPopup(`
+      <div style="font-family:'Space Grotesk',sans-serif;min-width:180px;">
+        <div style="font-weight:700;font-size:14px;color:${color};margin-bottom:4px;">M${mag.toFixed(1)}</div>
+        <div style="font-size:12px;color:#1a1a2e;margin-bottom:6px;">${eq.properties.place || 'Ubicación desconocida'}</div>
+        <div style="font-size:11px;color:#555;font-family:'Space Mono',monospace;">📅 ${fullDate}</div>
+        <div style="font-size:11px;color:#555;font-family:'Space Mono',monospace;">📏 Profundidad: ${depth?.toFixed(0) || '?'} km</div>
+      </div>
+    `);
+
     eqMarkers.push(m);
 
-    // Anillo de pulso solo para sismos de últimas 24h
     if (isRecent) {
       const sizePx = Math.max(14, Math.min(34, mag * 5));
       const pulseIcon = L.divIcon({
@@ -2978,7 +3003,7 @@ function renderEqMap() {
     }
   });
 
-  console.log(`[SeismoSense] Renderizando ${earthquakeData.length} sismos totales`);
+  console.log(`[SeismoSense] Renderizando ${filtered.length} de ${earthquakeData.length} sismos (filtro: ${currentDateFilter})`);
 }
 
 function renderFaultMap() {
@@ -2991,6 +3016,10 @@ function setMapMode(mode) {
   mapMode = mode;
   document.querySelectorAll('.map-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1))?.classList.add('active');
+
+  const dateFilter = document.getElementById('mapDateFilter');
+  if (dateFilter) dateFilter.style.display = (mode === 'sismos') ? 'block' : 'none';
+
   renderMap();
 }
 
