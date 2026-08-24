@@ -373,6 +373,28 @@ header {
 /* ── Events list ── */
 .events-list { flex: 1; overflow-y: auto; }
 
+.date-filter-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'Space Grotesk', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.date-filter-btn:hover { border-color: var(--accent); color: var(--text); }
+
+.date-filter-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
 .event-item {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
@@ -1033,6 +1055,13 @@ header {
       <div class="section-header" style="display:flex;justify-content:space-between;align-items:center">
         <span>ÚLTIMOS SISMOS — USGS</span>
         <span style="font-size:9px;color:var(--accent);font-family:'Space Mono'" id="eventsCount">—</span>
+      </div>
+      <div style="display:flex;gap:4px;padding:0 12px 8px;flex-wrap:wrap;">
+        <button class="date-filter-btn active" data-range="24h" onclick="setDateFilter('24h')">Actual (24h)</button>
+        <button class="date-filter-btn" data-range="3d" onclick="setDateFilter('3d')">3 días</button>
+        <button class="date-filter-btn" data-range="7d" onclick="setDateFilter('7d')">1 semana</button>
+        <button class="date-filter-btn" data-range="30d" onclick="setDateFilter('30d')">1 mes</button>
+        <button class="date-filter-btn" data-range="all" onclick="setDateFilter('all')">Todos</button>
       </div>
       <div class="events-list" id="eventsList">
         <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:12px;">
@@ -2522,23 +2551,63 @@ function renderRiskList() {
   });
 }
 
+// ── Filtro de fecha para lista de eventos ──
+let currentDateFilter = '24h';
+
+const DATE_FILTER_WINDOWS = {
+  '24h': 24 * 3600 * 1000,
+  '3d':  3 * 24 * 3600 * 1000,
+  '7d':  7 * 24 * 3600 * 1000,
+  '30d': 30 * 24 * 3600 * 1000,
+  'all': Infinity
+};
+
+function setDateFilter(range) {
+  currentDateFilter = range;
+  document.querySelectorAll('.date-filter-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.range === range);
+  });
+  renderEventsList();
+}
+
+function formatEventDate(time) {
+  const d = new Date(time);
+  const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const day = d.getUTCDate().toString().padStart(2,'0');
+  const month = months[d.getUTCMonth()];
+  const year = d.getUTCFullYear();
+  const hh = d.getUTCHours().toString().padStart(2,'0');
+  const mm = d.getUTCMinutes().toString().padStart(2,'0');
+  return `${day} ${month} ${year} · ${hh}:${mm} UTC`;
+}
+
 // ── Render events ──
 function renderEventsList() {
   const el = document.getElementById('eventsList');
   el.innerHTML = '';
 
-  const sorted = [...earthquakeData]
-    .sort((a, b) => b.properties.time - a.properties.time)
-    .slice(0, 80);
+  const now = Date.now();
+  const window = DATE_FILTER_WINDOWS[currentDateFilter];
 
-  document.getElementById('eventsCount').textContent = `${earthquakeData.length} EVENTOS`;
+  const filtered = earthquakeData.filter(eq => (now - eq.properties.time) <= window);
+  const sorted = filtered
+    .sort((a, b) => b.properties.time - a.properties.time)
+    .slice(0, 300); // límite de seguridad para no saturar el DOM
+
+  document.getElementById('eventsCount').textContent = `${filtered.length} EVENTOS`;
+
+  if (sorted.length === 0) {
+    el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-dim);font-size:12px;">
+      Sin sismos registrados en este rango de tiempo.
+    </div>`;
+    return;
+  }
 
   sorted.forEach(eq => {
     const mag = eq.properties.mag || 0;
     const magClass = mag >= 6 ? 'm-crit' : mag >= 5 ? 'm-high' : mag >= 4 ? 'm-mod' : 'm-low';
     const place = eq.properties.place || 'Ubicación desconocida';
-    const time = new Date(eq.properties.time);
-    const timeStr = time.toISOString().replace('T', ' ').substring(0, 16) + ' UTC';
+    const timeStr = formatEventDate(eq.properties.time);
     const depth = eq.geometry.coordinates[2]?.toFixed(0) || '?';
 
     const div = document.createElement('div');
