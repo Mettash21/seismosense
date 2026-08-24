@@ -1123,17 +1123,36 @@ header {
             <span class="tech-val" id="gpsStatus">No activado</span>
           </div>
           <div class="tech-row">
-            <span class="tech-key">Umbral &lt;50km</span>
-            <span class="tech-val">M ≥ 3.0</span>
+            <span class="tech-key">Tipo de notificación</span>
+            <span class="tech-val" id="notifTypeLabel">Cercanos (escalonado)</span>
           </div>
-          <div class="tech-row">
-            <span class="tech-key">Umbral &lt;150km</span>
-            <span class="tech-val">M ≥ 4.0</span>
+          <select id="notifTypeSelect" onchange="updateNotifType(this.value)" style="
+            width:100%;margin-top:6px;background:var(--void);border:1px solid var(--border);
+            color:var(--text);padding:6px;border-radius:6px;font-size:11px;
+            font-family:'Space Grotesk',sans-serif;">
+            <option value="cercanos">Cercanos (umbral escalonado)</option>
+            <option value="pais">En mi país</option>
+            <option value="continente">En mi continente</option>
+            <option value="mundo">En todo el mundo</option>
+          </select>
+          <div class="tech-row" style="margin-top:8px">
+            <span class="tech-key">Magnitud mínima</span>
+            <span class="tech-val" id="notifMagLabel">Automático por distancia</span>
           </div>
-          <div class="tech-row">
-            <span class="tech-key">Umbral &lt;300km</span>
-            <span class="tech-val">M ≥ 5.0</span>
-          </div>
+          <select id="notifMagSelect" onchange="updateNotifMag(this.value)" style="
+            width:100%;margin-top:6px;background:var(--void);border:1px solid var(--border);
+            color:var(--text);padding:6px;border-radius:6px;font-size:11px;
+            font-family:'Space Grotesk',sans-serif;">
+            <option value="auto">Automático (según distancia)</option>
+            <option value="2.5">2.5+</option>
+            <option value="3.0">3.0+</option>
+            <option value="3.5">3.5+</option>
+            <option value="4.0">4.0+</option>
+            <option value="4.5">4.5+</option>
+            <option value="5.0">5.0+</option>
+            <option value="5.5">5.5+</option>
+            <option value="6.0">6.0+</option>
+          </select>
           <button onclick="requestProximityAlerts()" style="
             margin-top:10px;width:100%;background:var(--accent);border:none;color:white;
             padding:8px;border-radius:6px;font-size:11px;font-weight:600;
@@ -1179,7 +1198,7 @@ header {
 
     <div class="map-controls">
       <button class="map-btn active" id="btnRisk" onclick="setMapMode('risk')">🎯 Riesgo</button>
-      <button class="map-btn" id="btnSismos" onclick="setMapMode('sismos')">💥 Sismos</button>
+      <button class="map-btn" id="btnSismos" onclick="setMapMode('sismos')">💥 Riesgo + Sismos</button>
       <button class="map-btn" id="btnFaults" onclick="setMapMode('faults')">🗺 Fallas</button>
       <button class="map-btn emergency" onclick="openEmergencyModal()">🚨 Emergencias</button>
     </div>
@@ -1592,6 +1611,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (localStorage.getItem('seismosense_proximity') === 'granted') {
     setTimeout(() => startProximityWatch(), 2000);
   }
+
+  restoreNotifSettings();
 });
 
 function updateClock() {
@@ -1995,10 +2016,23 @@ function requestProximityAlerts() {
       const gpsStatus = document.getElementById('gpsStatus');
       if (gpsStatus) { gpsStatus.textContent = '● Activo'; gpsStatus.className = 'tech-val ok'; }
 
-      showToast('📍 <strong>Alertas de proximidad activadas</strong><br><span style="color:#6b84a8;font-size:10px;">Te avisaremos de sismos reales cerca de tu ubicación</span>', 'success');
+      showToast('📍 <strong>Alertas de proximidad activadas</strong><br><span style="color:#6b84a8;font-size:10px;">Te avisaremos de sismos reales cerca de tu ubicación, aunque la app esté cerrada</span>', 'success');
 
       startProximityWatch();
       checkProximityAlerts();
+
+      // Actualizar ubicación en el servidor para alertas server-side
+      const fcmToken = localStorage.getItem('seismosense_fcm_token');
+      if (fcmToken) {
+        fetch('/api/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fcmToken, lat: userLocation.lat, lng: userLocation.lng,
+            notifType, notifMinMag, lang: currentLang, timestamp: Date.now()
+          })
+        }).catch(e => console.warn('[Proximity] No se pudo actualizar ubicación en servidor:', e.message));
+      }
     },
     err => {
       showToast('No se pudo obtener tu ubicación: ' + err.message, 'error');
@@ -2029,11 +2063,59 @@ function startProximityWatch() {
   }, 600000);
 }
 
+// ── Configuración de alertas (tipo + magnitud) ──
+let notifType = localStorage.getItem('seismosense_notif_type') || 'cercanos';
+let notifMinMag = localStorage.getItem('seismosense_notif_mag') || 'auto';
+
+const NOTIF_TYPE_RADIUS = {
+  cercanos: null,      // usa PROXIMITY_TIERS escalonado
+  pais: 1200,          // aprox. tamaño de un país grande
+  continente: 4000,
+  mundo: Infinity
+};
+
+function updateNotifType(val) {
+  notifType = val;
+  localStorage.setItem('seismosense_notif_type', val);
+  const labels = { cercanos: 'Cercanos (escalonado)', pais: 'En mi país', continente: 'En mi continente', mundo: 'En todo el mundo' };
+  document.getElementById('notifTypeLabel').textContent = labels[val];
+  syncNotifPrefsToServer();
+}
+
+function updateNotifMag(val) {
+  notifMinMag = val;
+  localStorage.setItem('seismosense_notif_mag', val);
+  document.getElementById('notifMagLabel').textContent = val === 'auto' ? 'Automático (según distancia)' : `M ${val}+`;
+  syncNotifPrefsToServer();
+}
+
+function syncNotifPrefsToServer() {
+  const fcmToken = localStorage.getItem('seismosense_fcm_token');
+  if (!fcmToken || !userLocation) return;
+  fetch('/api/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fcmToken, lat: userLocation.lat, lng: userLocation.lng,
+      notifType, notifMinMag, lang: currentLang, timestamp: Date.now()
+    })
+  }).catch(e => console.warn('[Notif] No se pudo sincronizar preferencias:', e.message));
+}
+
+function restoreNotifSettings() {
+  const typeSelect = document.getElementById('notifTypeSelect');
+  const magSelect = document.getElementById('notifMagSelect');
+  if (typeSelect) typeSelect.value = notifType;
+  if (magSelect) magSelect.value = notifMinMag;
+  updateNotifType(notifType);
+  updateNotifMag(notifMinMag);
+}
+
 function checkProximityAlerts() {
   if (!userLocation || earthquakeData.length === 0) return;
 
   const now = Date.now();
-  const recentWindow = 30 * 60 * 1000; // últimos 30 minutos — evento "reciente" real
+  const recentWindow = 30 * 60 * 1000;
 
   earthquakeData.forEach(eq => {
     if (alertedEventIds.has(eq.id)) return;
@@ -2043,12 +2125,26 @@ function checkProximityAlerts() {
     const dist = haversine(lat, lng, userLocation.lat, userLocation.lng);
     const mag = eq.properties.mag || 0;
 
-    // Buscar el tier correspondiente a esta distancia
-    const tier = PROXIMITY_TIERS.find(t => dist <= t.maxDist);
-    if (!tier) return; // fuera de todos los radios de interés
-    if (mag < tier.minMag) return; // no alcanza el umbral para esa distancia
+    let passes = false;
 
-    // ¡Alerta de proximidad real!
+    if (notifType === 'cercanos') {
+      // Umbrales escalonados clásicos, o magnitud fija si el usuario la configuró
+      if (notifMinMag !== 'auto') {
+        const tier = PROXIMITY_TIERS.find(t => dist <= t.maxDist);
+        passes = !!tier && mag >= parseFloat(notifMinMag);
+      } else {
+        const tier = PROXIMITY_TIERS.find(t => dist <= t.maxDist);
+        passes = !!tier && mag >= tier.minMag;
+      }
+    } else {
+      // pais / continente / mundo — radio fijo + magnitud configurada (default 4.5)
+      const radius = NOTIF_TYPE_RADIUS[notifType] ?? 1200;
+      const minMag = notifMinMag !== 'auto' ? parseFloat(notifMinMag) : 4.5;
+      passes = dist <= radius && mag >= minMag;
+    }
+
+    if (!passes) return;
+
     alertedEventIds.add(eq.id);
     triggerProximityAlert(eq, dist);
   });
@@ -2586,10 +2682,11 @@ function renderMap() {
   eqMarkers.forEach(m => mapInstance.removeLayer(m));
   riskMarkers = [];
   eqMarkers = [];
+  pulsingLayers = [];
   faultLines.forEach(f => mapInstance.removeLayer(f));
 
   if (mapMode === 'risk') renderRiskMap();
-  else if (mapMode === 'sismos') renderEqMap();
+  else if (mapMode === 'sismos') { renderRiskMap(); renderEqMap(); }
   else if (mapMode === 'faults') renderFaultMap();
 }
 
@@ -2607,6 +2704,11 @@ function renderRiskMap() {
       weight: 2,
       opacity: 0.85
     }).addTo(mapInstance);
+
+    // Guardar nivel de riesgo en la capa para animarla después
+    layer._riskLevel = zone.riskLevel;
+    layer._baseFillOpacity = 0.55;
+    pulsingLayers.push(layer);
 
     const center = getPolygonCenter(polygon);
     const label = L.divIcon({
@@ -2641,7 +2743,6 @@ function renderRiskMap() {
     riskMarkers.push(layer, labelMarker);
   });
 
-  // Marcador de la ubicación del usuario si tiene proximidad activada
   if (userLocation) {
     const userMarker = L.circleMarker([userLocation.lat, userLocation.lng], {
       radius: 8,
@@ -2653,6 +2754,40 @@ function renderRiskMap() {
     userMarker.bindTooltip('📍 Tu ubicación', { className: 'tooltip-custom', direction: 'top' });
     riskMarkers.push(userMarker);
   }
+
+  startPulseAnimation();
+}
+
+// ── Animación de pulso — velocidad y amplitud según nivel de riesgo ──
+let pulsingLayers = [];
+let pulseAnimFrame = null;
+const PULSE_CONFIG = {
+  low:      { speed: 0.6, amplitude: 0.08 },
+  moderate: { speed: 0.9, amplitude: 0.14 },
+  high:     { speed: 1.3, amplitude: 0.20 },
+  critical: { speed: 1.9, amplitude: 0.28 },
+  extreme:  { speed: 2.4, amplitude: 0.32 },
+};
+
+function startPulseAnimation() {
+  if (pulseAnimFrame) cancelAnimationFrame(pulseAnimFrame);
+
+  function tick() {
+    const t = Date.now() / 1000;
+    pulsingLayers.forEach(layer => {
+      const cfg = PULSE_CONFIG[layer._riskLevel] || PULSE_CONFIG.low;
+      const wave = Math.sin(t * cfg.speed) * cfg.amplitude;
+      const opacity = Math.max(0.15, Math.min(0.9, layer._baseFillOpacity + wave));
+      layer.setStyle({ fillOpacity: opacity });
+    });
+    pulseAnimFrame = requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function stopPulseAnimation() {
+  if (pulseAnimFrame) cancelAnimationFrame(pulseAnimFrame);
+  pulsingLayers = [];
 }
 
 function buildZonePolygon(zone) {
@@ -2892,23 +3027,82 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// ── Detección de plataforma para banner de instalación ──
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+}
+
+function getPlatform() {
+  const ua = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/.test(ua) && !window.MSStream;
+  const isAndroid = /Android/.test(ua);
+  const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+  if (isIOS) return 'ios';
+  if (isAndroid) return 'android';
+  if (isSafari) return 'safari-desktop';
+  return 'desktop';
+}
+
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
-  const bar = document.getElementById('pwaInstallBar');
-  if (bar) bar.style.display = 'flex';
+  showInstallBanner();
 });
 
 window.addEventListener('appinstalled', () => {
   console.log('[PWA] App instalada');
+  localStorage.setItem('seismosense_installed', 'true');
   dismissInstall();
 });
+
+// Mostrar banner siempre que no esté instalada — con texto adaptado a la plataforma
+function showInstallBanner() {
+  if (isStandalone()) return; // ya instalada
+  if (localStorage.getItem('seismosense_installed') === 'true') return;
+
+  const bar = document.getElementById('pwaInstallBar');
+  if (!bar) return;
+
+  const platform = getPlatform();
+  const titleEl = bar.querySelector('strong');
+  const subEl = bar.querySelector('span');
+  const btnEl = bar.querySelector('button:first-of-type');
+
+  if (platform === 'ios') {
+    if (titleEl) titleEl.textContent = '📲 Instalar SeismoSense';
+    if (subEl) subEl.textContent = 'Toca compartir (⬆) → "Añadir a pantalla de inicio"';
+    if (btnEl) { btnEl.textContent = 'Ver cómo'; btnEl.onclick = () => showIOSInstructions(); }
+  } else if (platform === 'safari-desktop') {
+    if (titleEl) titleEl.textContent = '📲 Instalar SeismoSense';
+    if (subEl) subEl.textContent = 'Menú Safari → "Añadir a pantalla de inicio"';
+    if (btnEl) { btnEl.textContent = 'Entendido'; btnEl.onclick = () => dismissInstallTemp(); }
+  } else if (deferredPrompt) {
+    if (titleEl) titleEl.textContent = '📲 Instalar SeismoSense';
+    if (subEl) subEl.textContent = 'Instala la app para recibir alertas sísmicas en tiempo real';
+    if (btnEl) { btnEl.textContent = 'Instalar'; btnEl.onclick = () => installPWA(); }
+  } else {
+    if (titleEl) titleEl.textContent = '📲 Instalar SeismoSense';
+    if (subEl) subEl.textContent = 'Busca el ícono de instalar en la barra de direcciones';
+    if (btnEl) { btnEl.textContent = 'Entendido'; btnEl.onclick = () => dismissInstallTemp(); }
+  }
+
+  bar.style.display = 'flex';
+}
+
+function showIOSInstructions() {
+  showToast(
+    '📲 <strong>Instalar en iPhone/iPad</strong><br><span style="color:#c8d8f0;font-size:11px;">1. Toca el ícono de compartir ⬆ en Safari<br>2. Desliza y toca "Añadir a pantalla de inicio"<br>3. Toca "Añadir"</span>',
+    'info'
+  );
+}
 
 function installPWA() {
   if (!deferredPrompt) return;
   deferredPrompt.prompt();
   deferredPrompt.userChoice.then(result => {
     console.log('[PWA] Install result:', result.outcome);
+    if (result.outcome === 'accepted') localStorage.setItem('seismosense_installed', 'true');
     deferredPrompt = null;
     dismissInstall();
   });
@@ -2918,6 +3112,16 @@ function dismissInstall() {
   const bar = document.getElementById('pwaInstallBar');
   if (bar) bar.style.display = 'none';
 }
+
+// Cierra el banner solo por esta sesión — vuelve a aparecer la próxima vez
+function dismissInstallTemp() {
+  dismissInstall();
+}
+
+// Mostrar banner en cada carga si no está instalada (todas las plataformas)
+window.addEventListener('load', () => {
+  setTimeout(() => showInstallBanner(), 2000);
+});
 
 // ══════════════════════════════════════════════════════
 //  PUSH NOTIFICATIONS — Firebase FCM + Web Push VAPID
@@ -3006,8 +3210,10 @@ async function requestNotifications() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             fcmToken,
-            subscription: subscription.toJSON(),
-            zone: 'global',
+            lat: userLocation?.lat ?? null,
+            lng: userLocation?.lng ?? null,
+            notifType: notifType,
+            notifMinMag: notifMinMag,
             lang: currentLang,
             timestamp: Date.now()
           })
