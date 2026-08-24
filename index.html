@@ -2685,12 +2685,17 @@ function renderMap() {
   pulsingLayers = [];
   faultLines.forEach(f => mapInstance.removeLayer(f));
 
-  if (mapMode === 'risk') renderRiskMap();
-  else if (mapMode === 'sismos') { renderRiskMap(); renderEqMap(); }
-  else if (mapMode === 'faults') renderFaultMap();
+  if (mapMode === 'risk') {
+    renderRiskMap(true); // animar zonas de riesgo
+  } else if (mapMode === 'sismos') {
+    renderRiskMap(false); // fallas estáticas, sin pulso
+    renderEqMap();        // 500 sismos más recientes, cada uno pulsando
+  } else if (mapMode === 'faults') {
+    renderFaultMap();
+  }
 }
 
-function renderRiskMap() {
+function renderRiskMap(animate = true) {
   riskZonesComputed.forEach(zone => {
     const color = getRiskColor(zone.riskLevel);
     const pct = zone.probability;
@@ -2705,12 +2710,14 @@ function renderRiskMap() {
       opacity: 0.85
     }).addTo(mapInstance);
 
-    // Guardar nivel de riesgo en la capa para animarla después
-    layer._riskLevel = zone.riskLevel;
-    layer._baseFillOpacity = 0.55;
-    pulsingLayers.push(layer);
-
     const center = getPolygonCenter(polygon);
+
+    if (animate) {
+      layer._riskLevel = zone.riskLevel;
+      layer._baseFillOpacity = 0.55;
+      pulsingLayers.push(layer);
+    }
+
     const label = L.divIcon({
       html: `<div style="
         background:rgba(255,255,255,0.92);
@@ -2741,6 +2748,27 @@ function renderRiskMap() {
     });
 
     riskMarkers.push(layer, labelMarker);
+
+    const pulseDot = L.circleMarker(center, {
+      radius: 14,
+      fillColor: color,
+      fillOpacity: 0.5,
+      color: color,
+      weight: 2,
+      opacity: 0.9
+    }).addTo(mapInstance);
+    pulseDot.on('click', () => showZoneDetail(zone));
+
+    if (animate) {
+      pulseDot._riskLevel = zone.riskLevel;
+      pulseDot._baseRadius = 14;
+      pulseDot._baseFillOpacity = 0.5;
+      pulsingLayers.push(pulseDot);
+    } else {
+      pulseDot.setRadius(8);
+      pulseDot.setStyle({ fillOpacity: 0.35, opacity: 0.6 });
+    }
+    riskMarkers.push(pulseDot);
   });
 
   if (userLocation) {
@@ -2755,7 +2783,7 @@ function renderRiskMap() {
     riskMarkers.push(userMarker);
   }
 
-  startPulseAnimation();
+  if (animate) startPulseAnimation();
 }
 
 // ── Animación de pulso — velocidad y amplitud según nivel de riesgo ──
@@ -2779,6 +2807,11 @@ function startPulseAnimation() {
       const wave = Math.sin(t * cfg.speed) * cfg.amplitude;
       const opacity = Math.max(0.15, Math.min(0.9, layer._baseFillOpacity + wave));
       layer.setStyle({ fillOpacity: opacity });
+
+      if (layer._baseRadius && typeof layer.setRadius === 'function') {
+        const radiusWave = Math.sin(t * cfg.speed) * cfg.amplitude * 20;
+        layer.setRadius(Math.max(8, layer._baseRadius + radiusWave));
+      }
     });
     pulseAnimFrame = requestAnimationFrame(tick);
   }
@@ -2830,21 +2863,37 @@ function getPolygonCenter(polygon) {
 }
 
 function renderEqMap() {
-  const toShow = earthquakeData.slice(0, 200);
+  const sorted = [...earthquakeData].sort((a, b) => b.properties.time - a.properties.time);
+  const toShow = sorted.slice(0, 500);
+
   toShow.forEach(eq => {
     const [lng, lat, depth] = eq.geometry.coordinates;
     const mag = eq.properties.mag || 2.5;
     const color = mag >= 6 ? '#e74c3c' : mag >= 5 ? '#e67e22' : mag >= 4 ? '#f39c12' : '#2ecc71';
-    const radius = Math.max(3, mag * 2.5);
+    const now = Date.now();
+    const isRecent = (now - eq.properties.time) < 24 * 3600 * 1000;
+    const sizePx = Math.max(6, Math.min(28, mag * 4));
 
-    const m = L.circleMarker([lat, lng], {
-      radius,
-      fillColor: color,
-      fillOpacity: 0.6,
-      color: color,
-      weight: 1,
-      opacity: 0.9
-    }).addTo(mapInstance);
+    const icon = L.divIcon({
+      html: `
+        <div style="position:relative;width:${sizePx}px;height:${sizePx}px;">
+          ${isRecent ? `<div class="eq-pulse-ring" style="
+            position:absolute;inset:0;border-radius:50%;
+            background:${color};opacity:0.5;
+          "></div>` : ''}
+          <div style="
+            position:absolute;inset:0;border-radius:50%;
+            background:${color};opacity:0.85;
+            border:1.5px solid rgba(255,255,255,0.6);
+          "></div>
+        </div>
+      `,
+      iconSize: [sizePx, sizePx],
+      iconAnchor: [sizePx/2, sizePx/2],
+      className: ''
+    });
+
+    const m = L.marker([lat, lng], { icon }).addTo(mapInstance);
 
     m.bindTooltip(
       `M${mag.toFixed(1)} · ${eq.properties.place?.substring(0,40) || ''}<br>Prof: ${depth?.toFixed(0) || '?'}km`,
@@ -2853,12 +2902,15 @@ function renderEqMap() {
 
     eqMarkers.push(m);
   });
+
+  console.log(`[SeismoSense] Renderizando ${toShow.length} de ${earthquakeData.length} sismos totales`);
 }
 
 function renderFaultMap() {
   faultLines.forEach(f => f.addTo(mapInstance));
-  renderRiskMap();
+  renderRiskMap(true);
 }
+
 
 function setMapMode(mode) {
   mapMode = mode;
