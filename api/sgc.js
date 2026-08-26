@@ -4,7 +4,6 @@
 
 const SGC_URL = 'https://srvags.sgc.gov.co/arcgis/rest/services/catalogo_sismos/catalogo_de_sismos_2/FeatureServer/0/query';
 
-// Códigos DIVIPOLA (DANE) — estándar oficial de departamentos de Colombia
 const DEPT_NAMES = {
   '05': 'Antioquia', '08': 'Atlántico', '11': 'Bogotá D.C.', '13': 'Bolívar',
   '15': 'Boyacá', '17': 'Caldas', '18': 'Caquetá', '19': 'Cauca',
@@ -27,42 +26,63 @@ async function fetchWithTimeout(url, ms = 9000) {
 }
 
 function buildPlace(attrs) {
-  // Normalizar código de departamento (puede venir con o sin ceros a la izquierda)
   const rawCode = String(attrs.DEPT_CODIGO || '').trim();
   const code = rawCode.padStart(2, '0');
   const deptName = DEPT_NAMES[code];
-
   const depth = attrs.ESP_PROFUNDIDAD;
   const depthTxt = depth != null ? ` · ${depth.toFixed(0)}km prof.` : '';
-
   if (deptName) return `${deptName}, Colombia${depthTxt}`;
   return `Colombia (SGC)${depthTxt}`;
+}
+
+// Intentar la consulta con params progresivamente más simples si falla
+async function tryQuery(paramsObj) {
+  const params = new URLSearchParams(paramsObj);
+  const url = `${SGC_URL}?${params.toString()}`;
+  const res = await fetchWithTimeout(url, 9000);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || 'ArcGIS error');
+  return data;
 }
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  try {
-    const params = new URLSearchParams({
-      where: '1=1',
-      outFields: 'OBJECTID,ESP_MAGNITUD,ESP_PROFUNDIDAD,ESP_LATITUD,ESP_LONGITUD,ESP_FECHA,ESP_FECHA_TXT,MUN_CODIGO,DEPT_CODIGO',
-      orderByFields: 'ESP_FECHA_LONG DESC',
-      resultRecordCount: '300',
-      returnGeometry: 'false',
-      f: 'json'
+  const attempts = [
+    // Intento 1: consulta simple sin orderBy ni límite (lo más compatible)
+    { where: '1=1', outFields: '*', f: 'json', returnGeometry: 'false' },
+    // Intento 2: con límite explícito
+    { where: '1=1', outFields: '*', f: 'json', returnGeometry: 'false', resultRecordCount: '500' },
+    // Intento 3: filtrando solo campos necesarios
+    { where: '1=1', outFields: 'OBJECTID,ESP_MAGNITUD,ESP_PROFUNDIDAD,ESP_LATITUD,ESP_LONGITUD,ESP_FECHA,DEPT_CODIGO', f: 'json', returnGeometry: 'false' },
+  ];
+
+  let data = null;
+  let lastError = null;
+
+  for (const attempt of attempts) {
+    try {
+      data = await tryQuery(attempt);
+      break;
+    } catch(e) {
+      lastError = e.message;
+      console.warn('[SGC Proxy] Intento falló:', JSON.stringify(attempt), '→', e.message);
+    }
+  }
+
+  if (!data) {
+    return res.status(200).json({
+      type: 'FeatureCollection',
+      features: [],
+      error: lastError || 'Todos los intentos de consulta fallaron'
     });
+  }
 
-    const url = `${SGC_URL}?${params.toString()}`;
-    const sgcRes = await fetchWithTimeout(url, 9000);
-
-    if (!sgcRes.ok) throw new Error(`SGC respondió HTTP ${sgcRes.status}`);
-
-    const data = await sgcRes.json();
-    if (data.error) throw new Error(`SGC error: ${data.error.message || JSON.stringify(data.error)}`);
-
+  try {
     const rawFeatures = data.features || [];
 
-    const features = rawFeatures
+    let features = rawFeatures
       .filter(f => f.attributes.ESP_MAGNITUD != null && f.attributes.ESP_LATITUD != null && f.attributes.ESP_LONGITUD != null)
       .map(f => {
         const a = f.attributes;
@@ -82,6 +102,10 @@ export default async function handler(req, res) {
         };
       });
 
+    // Ordenar por fecha descendente en el servidor (ya que orderByFields falló en ArcGIS)
+    features.sort((a, b) => b.properties.time - a.properties.time);
+    features = features.slice(0, 300);
+
     return res.status(200).json({
       type: 'FeatureCollection',
       features,
@@ -91,7 +115,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('[SGC Proxy] Error:', error);
+    console.error('[SGC Proxy] Error procesando datos:', error);
     return res.status(200).json({
       type: 'FeatureCollection',
       features: [],
