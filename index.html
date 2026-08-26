@@ -1473,7 +1473,7 @@ const RISK_ZONES = [
     baseRisk: 0.65, bValue: 0.65,
     history: 'Doblete M7.2+M7.5 el 24 jun 2026 — 920+ fallecidos. Liberación de energía acumulada ~100 años. Réplicas continuas. ΔCFS positivo en fallas vecinas hacia Colombia.',
     historyTitle: '⚡ EVENTO ACTIVO — 24 JUN 2026',
-    deuda: false, region: 'Norte Venezuela', alert: true
+    deuda: false, region: 'Norte Venezuela'
   },
   {
     id: 'ring-fire-chile', name: 'Norte Chile (Zona Subducción)', country: 'Chile',
@@ -2542,7 +2542,7 @@ function renderRiskList() {
     banner.classList.add('visible');
     const topAlert = criticals[0];
     document.getElementById('alertText').textContent =
-      `${topAlert.name} (${topAlert.country}) — Probabilidad estimada ${(topAlert.probability*100).toFixed(0)}% basada en modelos ETAS + Gutenberg-Richter. ${topAlert.recentCount} evento(s) reciente(s) en radio 300km.`;
+      `${topAlert.name} (${topAlert.country}) — Probabilidad estimada ${(topAlert.probability*100).toFixed(0)}% basada en modelos ETAS + Gutenberg-Richter. ${topAlert.recentCount} evento(s) reciente(s) en radio ${topAlert.radioKm || 300}km.`;
   } else {
     banner.classList.remove('visible');
   }
@@ -3063,7 +3063,7 @@ function showZoneDetail(zone) {
   document.getElementById('detailLabel').textContent = `Probabilidad ${getRiskLabel(zone.riskLevel)}`;
   document.getElementById('detailLabel').style.color = getRiskColor(zone.riskLevel);
   document.getElementById('detailDesc').textContent =
-    `${zone.recentCount} eventos en radio 300km (7 días). b-value: ${zone.computedBValue.toFixed(2)}. ${zone.deuda ? 'Deuda sísmica detectada.' : 'Sin deuda sísmica significativa.'} `;
+    `${zone.recentCount} eventos en radio ${zone.radioKm || 300}km (7 días). b-value: ${zone.computedBValue.toFixed(2)}. ${zone.deuda ? 'Deuda sísmica detectada.' : 'Sin deuda sísmica significativa.'} `;
 
   const etasVal = Math.min(95, Math.round(zone.probability * 100 * 0.9 + 5));
   const grVal = Math.min(95, Math.round(zone.probability * 100 * 0.85 + 8));
