@@ -1239,6 +1239,16 @@ header {
         <option value="30d">📅 1 mes</option>
         <option value="all">🌍 Todos</option>
       </select>
+      <select id="mapMagFilter" onchange="setMagFilter(this.value)" style="
+        display:none;background:var(--panel);border:1px solid var(--border);
+        color:var(--text);padding:8px 10px;border-radius:6px;font-size:11px;
+        font-family:'Space Grotesk',sans-serif;font-weight:600;cursor:pointer;">
+        <option value="0">Todas las magnitudes</option>
+        <option value="2.5">M 2.5+</option>
+        <option value="3.5">M 3.5+</option>
+        <option value="4.5">M 4.5+</option>
+        <option value="5.5">M 5.5+</option>
+      </select>
     </div>
 
     <div class="map-legend">
@@ -2587,6 +2597,12 @@ function setDateFilter(range) {
   if (mapMode === 'sismos') renderMap();
 }
 
+let currentMagFilter = 0;
+function setMagFilter(minMag) {
+  currentMagFilter = parseFloat(minMag) || 0;
+  if (mapMode === 'sismos') renderMap();
+}
+
 function formatEventDate(time) {
   const d = new Date(time);
   const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -2950,10 +2966,13 @@ function getPolygonCenter(polygon) {
 }
 
 function renderEqMap() {
-  // Aplica el mismo filtro de fecha usado en la lista de Eventos
+  // Aplica filtro de fecha + magnitud mínima
   const now = Date.now();
   const windowMs = DATE_FILTER_WINDOWS[currentDateFilter] ?? Infinity;
-  const filtered = earthquakeData.filter(eq => (now - eq.properties.time) <= windowMs);
+  const filtered = earthquakeData.filter(eq =>
+    (now - eq.properties.time) <= windowMs &&
+    (eq.properties.mag || 0) >= currentMagFilter
+  );
 
   filtered.forEach(eq => {
     const [lng, lat, depth] = eq.geometry.coordinates;
@@ -2972,9 +2991,9 @@ function renderEqMap() {
       opacity: 0.9
     }).addTo(mapInstance);
 
-    // Hover: resumen rápido
+    // Hover: resumen con fecha incluida
     m.bindTooltip(
-      `M${mag.toFixed(1)} · ${eq.properties.place?.substring(0,40) || ''}`,
+      `<strong>M${mag.toFixed(1)}</strong> · ${eq.properties.place?.substring(0,40) || ''}<br>📅 ${fullDate}`,
       { className: 'tooltip-custom', direction: 'top' }
     );
 
@@ -3022,6 +3041,9 @@ function setMapMode(mode) {
 
   const dateFilter = document.getElementById('mapDateFilter');
   if (dateFilter) dateFilter.style.display = (mode === 'sismos') ? 'block' : 'none';
+
+  const magFilter = document.getElementById('mapMagFilter');
+  if (magFilter) magFilter.style.display = (mode === 'sismos') ? 'block' : 'none';
 
   renderMap();
 }
